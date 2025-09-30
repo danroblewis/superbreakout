@@ -273,50 +273,126 @@
                 sound.inUse = true;
                 this.activeSounds++;
                 
-                // Create oscillator for this sound
-                const oscillator = this.audioContext.createOscillator();
-                const gainNode = this.audioContext.createGain();
-                
-                // Connect audio graph through master gain node
-                oscillator.connect(gainNode);
-                if (this.masterGainNode) {
-                    gainNode.connect(this.masterGainNode);
-                } else {
-                    gainNode.connect(this.audioContext.destination);
-                }
-                
-                // Configure sound based on type and intensity
-                const baseFreq = type === 'wall' ? 200 : 150;
+                const now = this.audioContext.currentTime;
                 const intensityFactor = Math.min(this.intensity / 100, 1);
                 
-                oscillator.frequency.setValueAtTime(
-                    baseFreq + (intensityFactor * 200), 
-                    this.audioContext.currentTime
-                );
-                oscillator.type = 'sine';
+                // Create audio nodes
+                const oscillator = this.audioContext.createOscillator();
+                const noiseBuffer = this.createNoiseBuffer();
+                const noiseSource = this.audioContext.createBufferSource();
+                const oscillatorGain = this.audioContext.createGain();
+                const noiseGain = this.audioContext.createGain();
+                const filter = this.audioContext.createBiquadFilter();
+                const compressor = this.audioContext.createDynamicsCompressor();
+                const reverbGain = this.audioContext.createGain();
+                const masterGain = this.audioContext.createGain();
                 
-                // Calculate normalized volume to prevent clipping
+                // Configure oscillator with frequency modulation and variation
+                const baseFreq = type === 'wall' ? 180 : 120;
+                const randomVariation = (Math.random() - 0.5) * 20; // ±10Hz variation
+                const frequency = baseFreq + (intensityFactor * 300) + randomVariation;
+                oscillator.frequency.setValueAtTime(frequency, now);
+                oscillator.type = 'sawtooth'; // More aggressive than sine
+                
+                // Add frequency sweep for punch
+                oscillator.frequency.exponentialRampToValueAtTime(frequency * (0.6 + Math.random() * 0.2), now + 0.05);
+                
+                // Configure noise
+                noiseSource.buffer = noiseBuffer;
+                noiseSource.loop = false;
+                
+                // Configure filter for punch with resonance sweep
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1200 + (intensityFactor * 1800), now);
+                filter.frequency.exponentialRampToValueAtTime(600 + (intensityFactor * 800), now + 0.1);
+                filter.Q.setValueAtTime(2 + intensityFactor, now);
+                
+                // Configure compressor for punch
+                compressor.threshold.setValueAtTime(-20, now);
+                compressor.knee.setValueAtTime(30, now);
+                compressor.ratio.setValueAtTime(12, now);
+                compressor.attack.setValueAtTime(0.003, now);
+                compressor.release.setValueAtTime(0.1, now);
+                
+                // Configure reverb (simple delay-based)
+                reverbGain.gain.setValueAtTime(0.15, now);
+                
+                // Calculate volumes
                 const baseVolume = this.calculateNormalizedVolume();
                 const intensityVolume = baseVolume + (intensityFactor * (this.maxVolume - baseVolume));
                 const finalVolume = Math.min(intensityVolume, this.maxVolume);
                 
-                // Envelope for natural sound
-                gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(finalVolume, this.audioContext.currentTime + 0.01);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
+                // Create punchy envelope
+                const attackTime = 0.001; // Very quick attack
+                const decayTime = 0.05;   // Quick decay
+                const sustainLevel = 0.3; // Lower sustain
+                const releaseTime = 0.08; // Quick release
                 
-                // Play the sound
-                oscillator.start(this.audioContext.currentTime);
-                oscillator.stop(this.audioContext.currentTime + 0.1);
+                // Oscillator envelope
+                oscillatorGain.gain.setValueAtTime(0, now);
+                oscillatorGain.gain.linearRampToValueAtTime(finalVolume * 0.7, now + attackTime);
+                oscillatorGain.gain.exponentialRampToValueAtTime(finalVolume * sustainLevel * 0.7, now + attackTime + decayTime);
+                oscillatorGain.gain.exponentialRampToValueAtTime(0.001, now + attackTime + decayTime + releaseTime);
+                
+                // Noise envelope (shorter, more percussive)
+                noiseGain.gain.setValueAtTime(0, now);
+                noiseGain.gain.linearRampToValueAtTime(finalVolume * 0.3, now + attackTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + attackTime + 0.02);
+                
+                // Connect audio graph
+                oscillator.connect(oscillatorGain);
+                noiseSource.connect(noiseGain);
+                
+                oscillatorGain.connect(filter);
+                noiseGain.connect(filter);
+                
+                filter.connect(compressor);
+                compressor.connect(masterGain);
+                
+                // Add reverb send
+                compressor.connect(reverbGain);
+                reverbGain.connect(masterGain);
+                
+                if (this.masterGainNode) {
+                    masterGain.connect(this.masterGainNode);
+                } else {
+                    masterGain.connect(this.audioContext.destination);
+                }
+                
+                // Start sounds
+                oscillator.start(now);
+                oscillator.stop(now + 0.15);
+                noiseSource.start(now);
                 
                 // Clean up after sound finishes
-                oscillator.onended = () => {
+                const cleanup = () => {
                     sound.inUse = false;
                     this.activeSounds--;
                 };
                 
+                oscillator.onended = cleanup;
+                noiseSource.onended = cleanup;
+                
+                // Store references for cleanup
                 sound.oscillator = oscillator;
-                sound.gainNode = gainNode;
+                sound.noiseSource = noiseSource;
+                sound.gainNode = masterGain;
+            }
+            
+            createNoiseBuffer() {
+                if (this.noiseBuffer) return this.noiseBuffer;
+                
+                const bufferSize = this.audioContext.sampleRate * 0.1; // 0.1 seconds
+                const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                const output = buffer.getChannelData(0);
+                
+                // Generate white noise
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                
+                this.noiseBuffer = buffer;
+                return buffer;
             }
             
             updateIntensity() {
