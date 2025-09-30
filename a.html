@@ -170,6 +170,7 @@
         let ballsToLaunch = 0;
         let launchTimer = 0;
         let controlsDisabled = false;
+        let boxIdCounter = 0;
         
         function initGame() {
             boxes = [];
@@ -198,19 +199,21 @@
         }
         
         function generateNewRow() {
+            console.log('=== Generating new row ===');
             const row = 0;
             
             // Weighted towards fewer boxes
-            // 30% chance of 0-2 boxes, 40% chance of 3-4 boxes, 30% chance of 5-6 boxes
             const rand = Math.random();
             let numBoxes;
             if (rand < 0.3) {
-                numBoxes = Math.floor(Math.random() * 3); // 0, 1, or 2
+                numBoxes = Math.floor(Math.random() * 3);
             } else if (rand < 0.7) {
-                numBoxes = Math.floor(Math.random() * 2) + 3; // 3 or 4
+                numBoxes = Math.floor(Math.random() * 2) + 3;
             } else {
-                numBoxes = Math.floor(Math.random() * 2) + 5; // 5 or 6
+                numBoxes = Math.floor(Math.random() * 2) + 5;
             }
+            
+            console.log('Creating', numBoxes, 'boxes');
             
             const availableColumns = [];
             for (let col = 0; col < GRID_COLS; col++) {
@@ -219,11 +222,11 @@
             
             const shuffled = availableColumns.sort(() => Math.random() - 0.5);
             const selectedColumns = shuffled.slice(0, numBoxes);
+            console.log('Selected columns:', selectedColumns);
             
             const minHealth = 1;
             const maxHealth = currentLevel;
             
-            // Increased ball pickup frequency: 40% chance
             const addBallPickup = numBoxes > 0 && Math.random() < 0.4;
             let ballPickupCol = null;
             
@@ -236,13 +239,16 @@
                 }
                 if (emptyColumns.length > 0) {
                     ballPickupCol = emptyColumns[Math.floor(Math.random() * emptyColumns.length)];
+                    console.log('Adding ball pickup at column:', ballPickupCol);
                 }
             }
             
             for (let col of selectedColumns) {
                 const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
                 
+                console.log('Creating box ID', boxIdCounter, 'at column', col, 'with health', health);
                 boxes.push({
+                    id: boxIdCounter++,
                     col: col,
                     row: row,
                     x: GRID_OFFSET_X + col * (BOX_SIZE + BOX_MARGIN),
@@ -256,7 +262,9 @@
             }
             
             if (ballPickupCol !== null) {
+                console.log('Creating ball pickup ID', boxIdCounter, 'at column', ballPickupCol);
                 boxes.push({
+                    id: boxIdCounter++,
                     col: ballPickupCol,
                     row: row,
                     x: GRID_OFFSET_X + ballPickupCol * (BOX_SIZE + BOX_MARGIN),
@@ -268,6 +276,8 @@
                     isBallPickup: true
                 });
             }
+            
+            console.log('Total boxes after generation:', boxes.length);
         }
         
         function dropBoxesAndAddRow() {
@@ -488,16 +498,23 @@
                         this.renderY + BALL_RADIUS > box.y &&
                         this.renderY - BALL_RADIUS < box.y + box.height) {
                         
+                        console.log('Hit box ID:', box.id, 'with health:', box.health, 'isBallPickup:', box.isBallPickup);
+                        
                         if (box.isBallPickup) {
                             box.health = 0;
                             ballCount++;
+                            console.log('Collected ball pickup, box ID:', box.id);
                             return;
                         }
                         
+                        const oldHealth = box.health;
                         box.health--;
-                        if (box.health < 0) box.health = 0; // Ensure it doesn't go negative
+                        console.log('Box ID:', box.id, 'health decreased from', oldHealth, 'to', box.health);
+                        
+                        if (box.health < 0) box.health = 0;
                         totalCollisions++;
                         
+                        // Only bounce if box still has health or just died
                         const ballCenterX = this.renderX;
                         const ballCenterY = this.renderY;
                         const boxCenterX = box.x + box.width / 2;
@@ -545,7 +562,10 @@
         
         function drawBoxes() {
             for (let box of boxes) {
-                if (box.health <= 0) continue;
+                if (box.health <= 0) {
+                    console.log('Skipping dead box at', box.x, box.y, 'health:', box.health);
+                    continue;
+                }
                 
                 if (box.isBallPickup) {
                     ctx.beginPath();
@@ -567,11 +587,24 @@
                     ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
                     ctx.fillRect(box.x, box.y, box.width, box.height);
                     
+                    // Draw outline
+                    ctx.strokeStyle = '#16213e';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(box.x, box.y, box.width, box.height);
+                    
+                    // Draw health number in center
                     ctx.fillStyle = 'white';
                     ctx.font = 'bold 20px Courier New';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(box.health, box.x + box.width/2, box.y + box.height/2);
+                    
+                    // Draw ID in bottom left corner
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.font = '10px Courier New';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(box.id, box.x + 2, box.y + box.height - 2);
                 }
             }
         }
