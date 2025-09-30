@@ -128,6 +128,10 @@
             <div class="stat-label">MAX SPEED</div>
             <div class="stat-value" id="maxSpeed">20</div>
         </div>
+        <div class="stat">
+            <div class="stat-label">AUDIO INTENSITY</div>
+            <div class="stat-value" id="audioIntensity">0</div>
+        </div>
         <div class="speed-indicator">
             <div class="speed-label">SPEED</div>
             <div class="speed-gauge">
@@ -152,6 +156,7 @@
         </div>
         
         <button id="resetBtn">Reset Game</button>
+        <button id="audioToggle">🔊 Audio On</button>
     </div>
 
     <div class="game-container">
@@ -161,6 +166,170 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // Audio System
+        class AudioSystem {
+            constructor() {
+                this.audioContext = null;
+                this.soundPool = [];
+                this.maxConcurrentSounds = 32;
+                this.activeSounds = 0;
+                this.collisionCount = 0;
+                this.lastCollisionTime = 0;
+                this.intensity = 0;
+                this.wallHitCount = 0;
+                this.boxHitCount = 0;
+                this.enabled = true;
+                
+                this.initAudio();
+            }
+            
+            initAudio() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.createSoundPool();
+                } catch (e) {
+                    console.log('Web Audio API not supported');
+                }
+            }
+            
+            createSoundPool() {
+                // Create a pool of reusable audio sources
+                for (let i = 0; i < this.maxConcurrentSounds; i++) {
+                    this.soundPool.push({
+                        oscillator: null,
+                        gainNode: null,
+                        inUse: false
+                    });
+                }
+            }
+            
+            getAvailableSound() {
+                return this.soundPool.find(sound => !sound.inUse);
+            }
+            
+            playWallHit() {
+                if (!this.enabled) return;
+                this.wallHitCount++;
+                this.playCollisionSound('wall');
+            }
+            
+            playBoxHit() {
+                if (!this.enabled) return;
+                this.boxHitCount++;
+                this.playCollisionSound('box');
+            }
+            
+            toggle() {
+                this.enabled = !this.enabled;
+                const button = document.getElementById('audioToggle');
+                button.textContent = this.enabled ? '🔊 Audio On' : '🔇 Audio Off';
+            }
+            
+            playCollisionSound(type) {
+                if (!this.audioContext || this.activeSounds >= this.maxConcurrentSounds) {
+                    return;
+                }
+                
+                const sound = this.getAvailableSound();
+                if (!sound) return;
+                
+                sound.inUse = true;
+                this.activeSounds++;
+                
+                // Create oscillator for this sound
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                // Connect audio graph
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                // Configure sound based on type and intensity
+                const baseFreq = type === 'wall' ? 200 : 150;
+                const intensityFactor = Math.min(this.intensity / 100, 1);
+                
+                oscillator.frequency.setValueAtTime(
+                    baseFreq + (intensityFactor * 200), 
+                    this.audioContext.currentTime
+                );
+                oscillator.type = 'sine';
+                
+                // Volume based on intensity
+                const volume = 0.1 + (intensityFactor * 0.3);
+                gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+                
+                // Envelope for natural sound
+                gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
+                
+                // Play the sound
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + 0.1);
+                
+                // Clean up after sound finishes
+                oscillator.onended = () => {
+                    sound.inUse = false;
+                    this.activeSounds--;
+                };
+                
+                sound.oscillator = oscillator;
+                sound.gainNode = gainNode;
+            }
+            
+            updateIntensity() {
+                const now = this.audioContext ? this.audioContext.currentTime : 0;
+                const timeSinceLastCollision = now - this.lastCollisionTime;
+                
+                // Decay intensity over time
+                this.intensity *= 0.95;
+                
+                // Increase intensity based on recent collisions
+                const recentCollisions = this.wallHitCount + this.boxHitCount;
+                this.intensity += recentCollisions * 2;
+                
+                // Cap intensity
+                this.intensity = Math.min(this.intensity, 200);
+                
+                // Reset counters
+                this.wallHitCount = 0;
+                this.boxHitCount = 0;
+                this.lastCollisionTime = now;
+            }
+            
+            playBackgroundAmbience() {
+                if (!this.audioContext) return;
+                
+                // Create a subtle background tone that changes with intensity
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(60, this.audioContext.currentTime);
+                oscillator.type = 'sine';
+                
+                // Very quiet background
+                gainNode.gain.setValueAtTime(0.02, this.audioContext.currentTime);
+                
+                oscillator.start();
+                
+                // Modulate frequency based on intensity
+                const modulate = () => {
+                    if (this.audioContext) {
+                        const intensityFreq = 60 + (this.intensity * 0.5);
+                        oscillator.frequency.setValueAtTime(intensityFreq, this.audioContext.currentTime);
+                        requestAnimationFrame(modulate);
+                    }
+                };
+                modulate();
+            }
+        }
+        
+        // Initialize audio system
+        const audioSystem = new AudioSystem();
         
         // Game constants
         const GRID_COLS = 6;
@@ -476,8 +645,10 @@
                             return;
                         } else if (next.collision.side === 'left' || next.collision.side === 'right') {
                             this.vx = -this.vx;
+                            audioSystem.playWallHit();
                         } else if (next.collision.side === 'top') {
                             this.vy = -this.vy;
+                            audioSystem.playWallHit();
                         }
                     } else if (next.collision.type === 'box') {
                         const box = next.collision.box;
@@ -488,6 +659,7 @@
                         } else {
                             box.health--;
                             totalCollisions++;
+                            audioSystem.playBoxHit();
                             
                             if (next.collision.side === 'left' || next.collision.side === 'right') {
                                 this.vx = -this.vx;
@@ -511,14 +683,17 @@
                 if (this.renderX - BALL_RADIUS < 0) {
                     this.renderX = BALL_RADIUS;
                     this.vx = Math.abs(this.vx);
+                    audioSystem.playWallHit();
                 } else if (this.renderX + BALL_RADIUS > CANVAS_WIDTH) {
                     this.renderX = CANVAS_WIDTH - BALL_RADIUS;
                     this.vx = -Math.abs(this.vx);
+                    audioSystem.playWallHit();
                 }
                 
                 if (this.renderY - BALL_RADIUS < 0) {
                     this.renderY = BALL_RADIUS;
                     this.vy = Math.abs(this.vy);
+                    audioSystem.playWallHit();
                 } else if (this.renderY > CANVAS_HEIGHT) {
                     lastBallX = this.renderX;
                     this.dead = true;
@@ -542,6 +717,7 @@
                         box.health--;
                         if (box.health < 0) box.health = 0;
                         totalCollisions++;
+                        audioSystem.playBoxHit();
                         
                         // Only bounce if box still has health or just died
                         const ballCenterX = this.renderX;
@@ -738,6 +914,7 @@
             }
             
             updateStats();
+            audioSystem.updateIntensity();
             requestAnimationFrame(gameLoop);
         }
         
@@ -749,6 +926,7 @@
             document.getElementById('boxCount').textContent = remainingBoxes;
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
+            document.getElementById('audioIntensity').textContent = Math.floor(audioSystem.intensity);
             
             // Update max speed reached
             if (currentSpeed > maxSpeedReached) {
@@ -799,6 +977,17 @@
         document.getElementById('resetBtn').addEventListener('click', () => {
             initGame();
         });
+        
+        document.getElementById('audioToggle').addEventListener('click', () => {
+            audioSystem.toggle();
+        });
+        
+        // Start audio context on first user interaction
+        document.addEventListener('click', () => {
+            if (audioSystem.audioContext && audioSystem.audioContext.state === 'suspended') {
+                audioSystem.audioContext.resume();
+            }
+        }, { once: true });
         
         initGame();
         gameLoop();
