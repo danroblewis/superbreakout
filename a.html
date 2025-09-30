@@ -104,8 +104,8 @@
 
     <div class="info">
         <div class="stat">
-            <div class="stat-label">ACTIVE BALLS</div>
-            <div class="stat-value" id="ballCount">0</div>
+            <div class="stat-label">BALLS</div>
+            <div class="stat-value" id="ballCount">1</div>
         </div>
         <div class="stat">
             <div class="stat-label">BOXES REMAINING</div>
@@ -171,6 +171,10 @@
             currentLevel = 1;
             hadActiveBalls = false;
             lastBallX = null;
+            ballCount = 1;
+            ballsToLaunch = 0;
+            launchTimer = 0;
+            controlsDisabled = false;
             
             // Reset launch position
             LAUNCH_X = CANVAS_WIDTH / 2;
@@ -201,12 +205,25 @@
             const selectedColumns = shuffled.slice(0, numBoxes);
             
             // Calculate health range based on level
-            // Level 1: 1
-            // Level 2: 1-2
-            // Level 3: 1-3
-            // Level 10: 1-10
             const minHealth = 1;
             const maxHealth = currentLevel;
+            
+            // Randomly decide to add a ball pickup (20% chance if there are boxes)
+            const addBallPickup = numBoxes > 0 && Math.random() < 0.2;
+            let ballPickupCol = null;
+            
+            if (addBallPickup) {
+                // Pick a random column that doesn't have a box
+                const emptyColumns = [];
+                for (let col = 0; col < GRID_COLS; col++) {
+                    if (!selectedColumns.includes(col)) {
+                        emptyColumns.push(col);
+                    }
+                }
+                if (emptyColumns.length > 0) {
+                    ballPickupCol = emptyColumns[Math.floor(Math.random() * emptyColumns.length)];
+                }
+            }
             
             for (let col of selectedColumns) {
                 const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
@@ -219,7 +236,23 @@
                     width: BOX_SIZE,
                     height: BOX_SIZE,
                     health: health,
-                    maxHealth: maxHealth
+                    maxHealth: maxHealth,
+                    isBallPickup: false
+                });
+            }
+            
+            // Add ball pickup if we decided to
+            if (ballPickupCol !== null) {
+                boxes.push({
+                    col: ballPickupCol,
+                    row: row,
+                    x: GRID_OFFSET_X + ballPickupCol * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: 1,
+                    maxHealth: 1,
+                    isBallPickup: true
                 });
             }
         }
@@ -260,6 +293,8 @@
                 this.renderY = this.y;
                 this.nextCollision = null;
                 this.distanceToCollision = 0;
+                
+                console.log('Ball created:', { angle, delay, vx: this.vx, vy: this.vy, active: this.active });
             }
             
             // Calculate time until next collision
@@ -404,14 +439,22 @@
                         }
                     } else if (next.collision.type === 'box') {
                         const box = next.collision.box;
-                        box.health--;
-                        totalCollisions++;
                         
-                        // Bounce off box
-                        if (next.collision.side === 'left' || next.collision.side === 'right') {
-                            this.vx = -this.vx;
+                        if (box.isBallPickup) {
+                            // Collect the ball pickup - don't bounce
+                            box.health = 0;
+                            ballCount++;
                         } else {
-                            this.vy = -this.vy;
+                            // Regular box - bounce and decrement health
+                            box.health--;
+                            totalCollisions++;
+                            
+                            // Bounce off box
+                            if (next.collision.side === 'left' || next.collision.side === 'right') {
+                                this.vx = -this.vx;
+                            } else {
+                                this.vy = -this.vy;
+                            }
                         }
                     }
                 }
@@ -456,6 +499,13 @@
                         this.renderX - BALL_RADIUS < box.x + box.width &&
                         this.renderY + BALL_RADIUS > box.y &&
                         this.renderY - BALL_RADIUS < box.y + box.height) {
+                        
+                        if (box.isBallPickup) {
+                            // Collect the ball pickup
+                            box.health = 0;
+                            ballCount++;
+                            return;
+                        }
                         
                         box.health--;
                         totalCollisions++;
@@ -606,7 +656,7 @@
             ctx.fill();
             
             // Draw aiming line
-            if (isAiming) {
+            if (isAiming && !controlsDisabled) {
                 // Use aimAngle for the arrow direction
                 const arrowLength = 100;
                 const endX = LAUNCH_X + Math.cos(aimAngle) * arrowLength;
@@ -641,16 +691,23 @@
         
         function updateStats() {
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
-            const remainingBoxes = boxes.filter(b => b.health > 0).length;
+            const remainingBoxes = boxes.filter(b => b.health > 0 && !b.isBallPickup).length;
             
-            document.getElementById('ballCount').textContent = activeBalls;
+            document.getElementById('ballCount').textContent = ballCount;
             document.getElementById('boxCount').textContent = remainingBoxes;
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('totalCollisions').textContent = totalCollisions.toLocaleString();
             
             const speedText = `Speed: ${currentSpeed.toFixed(1)}x | `;
-            const aimText = isAiming ? 'Click to launch!' : 'Click to aim and launch';
-            document.getElementById('speedIndicator').textContent = speedText + aimText;
+            let statusText = '';
+            if (controlsDisabled) {
+                statusText = 'Launching...';
+            } else if (isAiming) {
+                statusText = 'Click to launch!';
+            } else {
+                statusText = 'Click to aim and launch';
+            }
+            document.getElementById('speedIndicator').textContent = speedText + statusText;
         }
         
         // Mouse handling
@@ -672,10 +729,13 @@
         });
         
         canvas.addEventListener('click', (e) => {
-            // Launch 5 balls with time offset
-            for (let i = 0; i < 5; i++) {
-                balls.push(new Ball(aimAngle, i * 3));
-            }
+            if (controlsDisabled) return; // Ignore clicks when controls are disabled
+            
+            // Queue all balls to launch
+            ballsToLaunch = ballCount;
+            launchTimer = 0;
+            controlsDisabled = true; // Disable controls until all balls fall off
+            hadActiveBalls = false; // Reset this so we can detect when balls fall off
             
             // Reset timer when launching new balls
             timeInPlay = 0;
@@ -683,6 +743,8 @@
         
         // Keyboard controls for aiming
         document.addEventListener('keydown', (e) => {
+            if (controlsDisabled) return; // Ignore keyboard when controls are disabled
+            
             const angleStep = Math.PI / 36; // 5 degree increments
             
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
@@ -694,18 +756,18 @@
                 isAiming = true;
                 e.preventDefault();
             } else if (e.key === ' ' || e.key === 'Enter') {
-                // Launch balls with spacebar or enter
-                for (let i = 0; i < 5; i++) {
-                    balls.push(new Ball(aimAngle, i * 3));
-                }
+                // Queue all balls to launch
+                ballsToLaunch = ballCount;
+                launchTimer = 0;
+                controlsDisabled = true;
+                hadActiveBalls = false;
                 timeInPlay = 0;
                 e.preventDefault();
             }
             
             // Clamp angle to prevent horizontal shots
-            // Range: -179° to -1° (excluding 0° and -180°)
-            const minAngle = -Math.PI + 0.01; // Slightly less than -180°
-            const maxAngle = -0.01; // Slightly less than 0°
+            const minAngle = -Math.PI + 0.01;
+            const maxAngle = -0.01;
             
             if (aimAngle > maxAngle) {
                 aimAngle = maxAngle;
