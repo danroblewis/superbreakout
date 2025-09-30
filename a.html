@@ -82,10 +82,8 @@
     <h1>🎮 Optimized Trajectory Breakout</h1>
     
     <div class="instructions">
-        <strong>How it works:</strong> Uses analytical collision detection to jump ahead in time. 
-        <strong>Mouse:</strong> Move to aim, click to launch 5 balls. 
-        <strong>Keyboard:</strong> Arrow keys or A/D to aim, Space/Enter to launch. 
-        The game speeds up automatically when balls are active. Balls that cross the bottom are removed.
+        <strong>Controls:</strong> Arrow keys or A/D to aim, Space/Enter to launch all balls. 
+        The game speeds up automatically when balls are active. Collect white circles for +1 ball!
     </div>
 
     <canvas id="gameCanvas" width="490" height="600"></canvas>
@@ -124,7 +122,6 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        console.log('Canvas found:', canvas, 'Context:', ctx);
         
         // Game constants
         const GRID_COLS = 6;
@@ -146,9 +143,7 @@
         let SPEED = 3; // Now variable, controlled by slider
         
         // Aiming state
-        let mouseX = 0;
-        let mouseY = 0;
-        let isAiming = false;
+        let isAiming = true; // Always show aiming line
         let aimAngle = -Math.PI / 2; // Start aiming straight up
         
         // Game state
@@ -294,7 +289,6 @@
                 this.renderY = this.y;
                 this.nextCollision = null;
                 this.distanceToCollision = 0;
-                
                 console.log('Ball created:', { angle, delay, vx: this.vx, vy: this.vy, active: this.active });
             }
             
@@ -712,55 +706,22 @@
             document.getElementById('speedIndicator').textContent = speedText + statusText;
         }
         
-        // Mouse handling
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-            
-            // Update aim angle based on mouse position
-            const dx = mouseX - LAUNCH_X;
-            const dy = mouseY - LAUNCH_Y;
-            aimAngle = Math.atan2(dy, dx);
-            
-            isAiming = true;
-        });
-        
-        canvas.addEventListener('mouseleave', () => {
-            isAiming = false;
-        });
-        
-        canvas.addEventListener('click', (e) => {
-            console.log('Canvas clicked! controlsDisabled:', controlsDisabled);
-            if (controlsDisabled) return; // Ignore clicks when controls are disabled
-            
-            console.log('Launching balls! ballCount:', ballCount);
-            // Queue all balls to launch
-            ballsToLaunch = ballCount;
-            launchTimer = 0;
-            controlsDisabled = true; // Disable controls until all balls fall off
-            hadActiveBalls = false; // Reset this so we can detect when balls fall off
-            
-            // Reset timer when launching new balls
-            timeInPlay = 0;
-        });
-        
         // Keyboard controls for aiming
         document.addEventListener('keydown', (e) => {
-            if (controlsDisabled) return; // Ignore keyboard when controls are disabled
+            console.log('Key pressed:', e.key, 'controlsDisabled:', controlsDisabled);
+            
+            if (controlsDisabled) return;
             
             const angleStep = Math.PI / 36; // 5 degree increments
             
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
                 aimAngle -= angleStep;
-                isAiming = true;
                 e.preventDefault();
             } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
                 aimAngle += angleStep;
-                isAiming = true;
                 e.preventDefault();
             } else if (e.key === ' ' || e.key === 'Enter') {
-                // Queue all balls to launch
+                console.log('Space/Enter pressed! Setting ballsToLaunch to:', ballCount);
                 ballsToLaunch = ballCount;
                 launchTimer = 0;
                 controlsDisabled = true;
@@ -785,6 +746,7 @@
         });
         
         document.getElementById('add5Btn').addEventListener('click', () => {
+            console.log('Add 5 button clicked');
             for (let i = 0; i < 5; i++) {
                 const randomAngle = -Math.PI/2 + (Math.random() - 0.5) * Math.PI * 0.8;
                 balls.push(new Ball(randomAngle, i * 3));
@@ -802,7 +764,6 @@
         });
         
         initGame();
-        console.log('Starting game loop...');
         gameLoop();
     </script>
 </body>
