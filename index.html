@@ -334,10 +334,7 @@
                 
                 // Create audio nodes
                 const oscillator = this.audioContext.createOscillator();
-                const noiseBuffer = this.createNoiseBuffer();
-                const noiseSource = this.audioContext.createBufferSource();
                 const oscillatorGain = this.audioContext.createGain();
-                const noiseGain = this.audioContext.createGain();
                 const filter = this.audioContext.createBiquadFilter();
                 const compressor = this.audioContext.createDynamicsCompressor();
                 const reverbGain = this.audioContext.createGain();
@@ -352,10 +349,6 @@
                 
                 // Add frequency sweep for punch
                 oscillator.frequency.exponentialRampToValueAtTime(frequency * (0.6 + Math.random() * 0.2), now + 0.05);
-                
-                // Configure noise
-                noiseSource.buffer = noiseBuffer;
-                noiseSource.loop = false;
                 
                 // Configure filter for punch with resonance sweep
                 filter.type = 'lowpass';
@@ -386,21 +379,13 @@
                 
                 // Oscillator envelope
                 oscillatorGain.gain.setValueAtTime(0, now);
-                oscillatorGain.gain.linearRampToValueAtTime(finalVolume * 0.7, now + attackTime);
-                oscillatorGain.gain.exponentialRampToValueAtTime(finalVolume * sustainLevel * 0.7, now + attackTime + decayTime);
+                oscillatorGain.gain.linearRampToValueAtTime(finalVolume, now + attackTime);
+                oscillatorGain.gain.exponentialRampToValueAtTime(finalVolume * sustainLevel, now + attackTime + decayTime);
                 oscillatorGain.gain.exponentialRampToValueAtTime(0.001, now + attackTime + decayTime + releaseTime);
-                
-                // Noise envelope (shorter, more percussive)
-                noiseGain.gain.setValueAtTime(0, now);
-                noiseGain.gain.linearRampToValueAtTime(finalVolume * 0.3, now + attackTime);
-                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + attackTime + 0.02);
                 
                 // Connect audio graph
                 oscillator.connect(oscillatorGain);
-                noiseSource.connect(noiseGain);
-                
                 oscillatorGain.connect(filter);
-                noiseGain.connect(filter);
                 
                 filter.connect(compressor);
                 compressor.connect(masterGain);
@@ -415,40 +400,19 @@
                     masterGain.connect(this.audioContext.destination);
                 }
                 
-                // Start sounds
+                // Start sound
                 oscillator.start(now);
                 oscillator.stop(now + 0.15);
-                noiseSource.start(now);
                 
                 // Clean up after sound finishes
-                const cleanup = () => {
+                oscillator.onended = () => {
                     sound.inUse = false;
                     this.activeSounds--;
                 };
                 
-                oscillator.onended = cleanup;
-                noiseSource.onended = cleanup;
-                
                 // Store references for cleanup
                 sound.oscillator = oscillator;
-                sound.noiseSource = noiseSource;
                 sound.gainNode = masterGain;
-            }
-            
-            createNoiseBuffer() {
-                if (this.noiseBuffer) return this.noiseBuffer;
-                
-                const bufferSize = this.audioContext.sampleRate * 0.1; // 0.1 seconds
-                const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
-                const output = buffer.getChannelData(0);
-                
-                // Generate white noise
-                for (let i = 0; i < bufferSize; i++) {
-                    output[i] = Math.random() * 2 - 1;
-                }
-                
-                this.noiseBuffer = buffer;
-                return buffer;
             }
             
             updateIntensity() {
