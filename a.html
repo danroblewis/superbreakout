@@ -83,17 +83,23 @@
     
     <div class="instructions">
         <strong>How it works:</strong> Uses analytical collision detection to jump ahead in time. 
-        Click on the canvas to aim and launch a ball in that direction. The game speeds up automatically 
-        when multiple balls are active. Balls that cross the bottom are removed.
+        <strong>Mouse:</strong> Move to aim, click to launch 5 balls. 
+        <strong>Keyboard:</strong> Arrow keys or A/D to aim, Space/Enter to launch. 
+        The game speeds up automatically when balls are active. Balls that cross the bottom are removed.
     </div>
 
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas" width="490" height="600"></canvas>
 
     <div class="speed-indicator" id="speedIndicator">Speed: 1x | <span id="aimStatus">Click to aim and launch</span></div>
 
     <div class="controls">
         <button id="resetBtn">Reset Game</button>
         <button id="add5Btn">Add 5 Random Balls</button>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <label for="speedSlider" style="color: #eee;">Ball Speed:</label>
+            <input type="range" id="speedSlider" min="1" max="50" value="3" step="1" style="width: 150px;">
+            <span id="speedValue" style="color: #4ecca3;">3</span>
+        </div>
     </div>
 
     <div class="info">
@@ -106,8 +112,8 @@
             <div class="stat-value" id="boxCount">0</div>
         </div>
         <div class="stat">
-            <div class="stat-label">COLLISIONS/FRAME</div>
-            <div class="stat-value" id="collisionsPerFrame">0</div>
+            <div class="stat-label">LEVEL</div>
+            <div class="stat-value" id="levelCount">1</div>
         </div>
         <div class="stat">
             <div class="stat-label">TOTAL COLLISIONS</div>
@@ -120,24 +126,29 @@
         const ctx = canvas.getContext('2d');
         
         // Game constants
-        const GRID_COLS = 10;
-        const GRID_ROWS = 5;
+        const GRID_COLS = 6;
+        const GRID_ROWS = 3; // Start with 3 rows
         const BOX_SIZE = 60;
         const BOX_MARGIN = 5;
-        const GRID_OFFSET_X = 100;
+        const GRID_OFFSET_X = 50;
         const GRID_OFFSET_Y = 50;
+        const ROW_HEIGHT = BOX_SIZE + BOX_MARGIN;
         
-        const LAUNCH_X = canvas.width / 2;
-        const LAUNCH_Y = canvas.height - 30;
+        const CANVAS_WIDTH = GRID_OFFSET_X * 2 + GRID_COLS * (BOX_SIZE + BOX_MARGIN);
+        const CANVAS_HEIGHT = 600;
+        
+        const LAUNCH_X = CANVAS_WIDTH / 2;
+        const LAUNCH_Y = CANVAS_HEIGHT - 30;
         const BALL_RADIUS = 6;
         
         const ANGLE = -Math.PI / 4;
-        const SPEED = 3;
+        let SPEED = 3; // Now variable, controlled by slider
         
         // Aiming state
         let mouseX = 0;
         let mouseY = 0;
         let isAiming = false;
+        let aimAngle = -Math.PI / 2; // Start aiming straight up
         
         // Game state
         let boxes = [];
@@ -157,23 +168,75 @@
             speedAccumulator = 1;
             timeInPlay = 0;
             lastLaunchTime = 0;
+            currentLevel = 1;
+            hadActiveBalls = false;
             
-            for (let row = 0; row < GRID_ROWS; row++) {
-                for (let col = 0; col < GRID_COLS; col++) {
-                    boxes.push({
-                        col: col,
-                        row: row,
-                        x: GRID_OFFSET_X + col * (BOX_SIZE + BOX_MARGIN),
-                        y: GRID_OFFSET_Y + row * (BOX_SIZE + BOX_MARGIN),
-                        width: BOX_SIZE,
-                        height: BOX_SIZE,
-                        health: Math.floor(Math.random() * 15) + 5,
-                        maxHealth: 20
-                    });
-                }
-            }
+            // Start with 3 rows
+            generateNewRow();
+            generateNewRow();
+            generateNewRow();
             
             updateStats();
+        }
+        
+        function generateNewRow() {
+            const row = 0; // Always add to the top
+            
+            // Randomly choose how many boxes to place (0 to GRID_COLS)
+            const numBoxes = Math.floor(Math.random() * (GRID_COLS + 1));
+            
+            // Create array of all possible column positions
+            const availableColumns = [];
+            for (let col = 0; col < GRID_COLS; col++) {
+                availableColumns.push(col);
+            }
+            
+            // Shuffle and pick random positions
+            const shuffled = availableColumns.sort(() => Math.random() - 0.5);
+            const selectedColumns = shuffled.slice(0, numBoxes);
+            
+            // Calculate health range based on level
+            // Level 1: 1
+            // Level 2: 1-2
+            // Level 3: 1-3
+            // Level 10: 1-10
+            const minHealth = 1;
+            const maxHealth = currentLevel;
+            
+            for (let col of selectedColumns) {
+                const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
+                
+                boxes.push({
+                    col: col,
+                    row: row,
+                    x: GRID_OFFSET_X + col * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: health,
+                    maxHealth: maxHealth
+                });
+            }
+        }
+        
+        function dropBoxesAndAddRow() {
+            // Move all existing boxes down one row
+            for (let box of boxes) {
+                box.row++;
+                box.y += ROW_HEIGHT;
+            }
+            
+            // Check if any boxes have moved off screen (game over condition)
+            const offScreenBoxes = boxes.filter(b => b.y > CANVAS_HEIGHT - 100);
+            if (offScreenBoxes.length > 0) {
+                // Could add game over logic here
+            }
+            
+            // Increment level
+            currentLevel++;
+            
+            // Add new row at the top
+            generateNewRow();
         }
         
         // Analytical collision detection
@@ -201,7 +264,7 @@
                 
                 // Check wall collisions
                 if (this.vx > 0) {
-                    const t = (canvas.width - BALL_RADIUS - this.x) / this.vx;
+                    const t = (CANVAS_WIDTH - BALL_RADIUS - this.x) / this.vx;
                     if (t > 0 && t < minTime) {
                         minTime = t;
                         collision = { type: 'wall', side: 'right' };
@@ -221,7 +284,7 @@
                         collision = { type: 'wall', side: 'top' };
                     }
                 } else if (this.vy > 0) {
-                    const t = (canvas.height - this.y) / this.vy;
+                    const t = (CANVAS_HEIGHT - this.y) / this.vy;
                     if (t > 0 && t < minTime) {
                         minTime = t;
                         collision = { type: 'wall', side: 'bottom' };
@@ -363,15 +426,15 @@
                 if (this.renderX - BALL_RADIUS < 0) {
                     this.renderX = BALL_RADIUS;
                     this.vx = Math.abs(this.vx);
-                } else if (this.renderX + BALL_RADIUS > canvas.width) {
-                    this.renderX = canvas.width - BALL_RADIUS;
+                } else if (this.renderX + BALL_RADIUS > CANVAS_WIDTH) {
+                    this.renderX = CANVAS_WIDTH - BALL_RADIUS;
                     this.vx = -Math.abs(this.vx);
                 }
                 
                 if (this.renderY - BALL_RADIUS < 0) {
                     this.renderY = BALL_RADIUS;
                     this.vy = Math.abs(this.vy);
-                } else if (this.renderY > canvas.height) {
+                } else if (this.renderY > CANVAS_HEIGHT) {
                     this.dead = true;
                     return;
                 }
@@ -461,9 +524,9 @@
             }
             
             // Speed increases based on time balls have been in play since last launch
-            // Start at 1x, gradually increase
+            // Exponential growth for faster acceleration
             const secondsInPlay = timeInPlay / 60; // Assuming 60 FPS
-            const speed = 1 + secondsInPlay * 5; // Linear growth: +5x per second
+            const speed = Math.pow(1.5, secondsInPlay * 3); // 1.5^(3t) - very fast growth
             
             // Cap maximum speed
             return Math.min(speed, 2000);
@@ -473,10 +536,20 @@
             ctx.fillStyle = '#0f3460';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Increment time if balls are active
+            // Check for active balls
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
+            
+            // Detect when all balls have left the field
+            if (hadActiveBalls && activeBalls === 0) {
+                dropBoxesAndAddRow();
+                balls = []; // Clear dead balls
+                hadActiveBalls = false;
+            }
+            
+            // Track if we have active balls this frame
             if (activeBalls > 0) {
                 timeInPlay++;
+                hadActiveBalls = true;
             }
             
             currentSpeed = calculateSpeed();
@@ -518,39 +591,32 @@
             
             // Draw aiming line
             if (isAiming) {
-                const dx = mouseX - LAUNCH_X;
-                const dy = mouseY - LAUNCH_Y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                // Use aimAngle for the arrow direction
+                const arrowLength = 100;
+                const endX = LAUNCH_X + Math.cos(aimAngle) * arrowLength;
+                const endY = LAUNCH_Y + Math.sin(aimAngle) * arrowLength;
                 
-                if (dist > 10) {
-                    // Draw arrow
-                    const angle = Math.atan2(dy, dx);
-                    const arrowLength = Math.min(dist, 100);
-                    const endX = LAUNCH_X + Math.cos(angle) * arrowLength;
-                    const endY = LAUNCH_Y + Math.sin(angle) * arrowLength;
-                    
-                    ctx.strokeStyle = '#4ecca3';
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(LAUNCH_X, LAUNCH_Y);
-                    ctx.lineTo(endX, endY);
-                    ctx.stroke();
-                    
-                    // Arrow head
-                    const headlen = 10;
-                    ctx.beginPath();
-                    ctx.moveTo(endX, endY);
-                    ctx.lineTo(
-                        endX - headlen * Math.cos(angle - Math.PI / 6),
-                        endY - headlen * Math.sin(angle - Math.PI / 6)
-                    );
-                    ctx.moveTo(endX, endY);
-                    ctx.lineTo(
-                        endX - headlen * Math.cos(angle + Math.PI / 6),
-                        endY - headlen * Math.sin(angle + Math.PI / 6)
-                    );
-                    ctx.stroke();
-                }
+                ctx.strokeStyle = '#4ecca3';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(LAUNCH_X, LAUNCH_Y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // Arrow head
+                const headlen = 10;
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - headlen * Math.cos(aimAngle - Math.PI / 6),
+                    endY - headlen * Math.sin(aimAngle - Math.PI / 6)
+                );
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - headlen * Math.cos(aimAngle + Math.PI / 6),
+                    endY - headlen * Math.sin(aimAngle + Math.PI / 6)
+                );
+                ctx.stroke();
             }
             
             updateStats();
@@ -563,7 +629,7 @@
             
             document.getElementById('ballCount').textContent = activeBalls;
             document.getElementById('boxCount').textContent = remainingBoxes;
-            document.getElementById('collisionsPerFrame').textContent = collisionsThisFrame;
+            document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('totalCollisions').textContent = totalCollisions.toLocaleString();
             
             const speedText = `Speed: ${currentSpeed.toFixed(1)}x | `;
@@ -576,6 +642,12 @@
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
+            
+            // Update aim angle based on mouse position
+            const dx = mouseX - LAUNCH_X;
+            const dy = mouseY - LAUNCH_Y;
+            aimAngle = Math.atan2(dy, dx);
+            
             isAiming = true;
         });
         
@@ -584,20 +656,45 @@
         });
         
         canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+            // Launch 5 balls with time offset
+            for (let i = 0; i < 5; i++) {
+                balls.push(new Ball(aimAngle, i * 3));
+            }
             
-            const dx = clickX - LAUNCH_X;
-            const dy = clickY - LAUNCH_Y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            // Reset timer when launching new balls
+            timeInPlay = 0;
+        });
+        
+        // Keyboard controls for aiming
+        document.addEventListener('keydown', (e) => {
+            const angleStep = Math.PI / 36; // 5 degree increments
             
-            if (dist > 10) {
-                const angle = Math.atan2(dy, dx);
-                balls.push(new Ball(angle));
-                
-                // Reset timer when launching a new ball
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                aimAngle -= angleStep;
+                isAiming = true;
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                aimAngle += angleStep;
+                isAiming = true;
+                e.preventDefault();
+            } else if (e.key === ' ' || e.key === 'Enter') {
+                // Launch balls with spacebar or enter
+                for (let i = 0; i < 5; i++) {
+                    balls.push(new Ball(aimAngle, i * 3));
+                }
                 timeInPlay = 0;
+                e.preventDefault();
+            }
+            
+            // Clamp angle to prevent horizontal shots
+            // Range: -179° to -1° (excluding 0° and -180°)
+            const minAngle = -Math.PI + 0.01; // Slightly less than -180°
+            const maxAngle = -0.01; // Slightly less than 0°
+            
+            if (aimAngle > maxAngle) {
+                aimAngle = maxAngle;
+            } else if (aimAngle < minAngle) {
+                aimAngle = minAngle;
             }
         });
         
@@ -610,6 +707,16 @@
                 const randomAngle = -Math.PI/2 + (Math.random() - 0.5) * Math.PI * 0.8;
                 balls.push(new Ball(randomAngle, i * 3));
             }
+            timeInPlay = 0;
+        });
+        
+        // Speed slider control
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        
+        speedSlider.addEventListener('input', (e) => {
+            SPEED = parseFloat(e.target.value);
+            speedValue.textContent = SPEED;
         });
         
         initGame();
