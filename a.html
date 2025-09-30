@@ -124,6 +124,7 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        console.log('Canvas found:', canvas, 'Context:', ctx);
         
         // Game constants
         const GRID_COLS = 6;
@@ -686,6 +687,7 @@
             }
             
             updateStats();
+            console.log('Calling requestAnimationFrame');
             requestAnimationFrame(gameLoop);
         }
         
@@ -729,8 +731,10 @@
         });
         
         canvas.addEventListener('click', (e) => {
+            console.log('Canvas clicked! controlsDisabled:', controlsDisabled);
             if (controlsDisabled) return; // Ignore clicks when controls are disabled
             
+            console.log('Launching balls! ballCount:', ballCount);
             // Queue all balls to launch
             ballsToLaunch = ballCount;
             launchTimer = 0;
@@ -798,6 +802,7 @@
         });
         
         initGame();
+        console.log('Starting game loop...');
         gameLoop();
     </script>
 </body>
