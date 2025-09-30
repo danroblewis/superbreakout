@@ -803,8 +803,8 @@
             updateRenderPosition(speed) {
                 if (!this.active || this.dead) return;
                 
-                this.renderX += this.vx;
-                this.renderY += this.vy;
+                this.renderX += this.vx * speed;
+                this.renderY += this.vy * speed;
                 
                 if (this.renderX - BALL_RADIUS < 0) {
                     this.renderX = BALL_RADIUS;
@@ -985,12 +985,12 @@
             const ANALYTICAL_THRESHOLD = 50;
             
             if (currentSpeed < ANALYTICAL_THRESHOLD) {
-                const stepsThisFrame = Math.floor(currentSpeed);
+                const stepsThisFrame = Math.max(1, Math.ceil(currentSpeed));
                 collisionsThisFrame = 0;
                 
                 for (let step = 0; step < stepsThisFrame; step++) {
                     for (let ball of balls) {
-                        ball.updateRenderPosition(currentSpeed);
+                        ball.updateRenderPosition(currentSpeed / stepsThisFrame);
                     }
                 }
             } else {
