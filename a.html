@@ -145,6 +145,11 @@
         const ANGLE = -Math.PI / 4;
         let SPEED = 3;
         
+        // Tunable game parameters
+        const ANGLE_STEP = Math.PI / 72; // Aiming precision (smaller = finer control)
+        const BASE_SPEED_OFFSET = 15; // Added to slider speed value
+        const SPEED_ACCELERATION_RATE = 3; // How fast the game speeds up (higher = faster acceleration)
+        
         // Aiming state
         let isAiming = true;
         let aimAngle = -Math.PI / 2;
@@ -292,8 +297,8 @@
                 this.active = delay === 0;
                 this.x = LAUNCH_X;
                 this.y = LAUNCH_Y;
-                this.vx = Math.cos(angle) * (SPEED + 15);
-                this.vy = Math.sin(angle) * (SPEED + 15);
+                this.vx = Math.cos(angle) * (SPEED + BASE_SPEED_OFFSET);
+                this.vy = Math.sin(angle) * (SPEED + BASE_SPEED_OFFSET);
                 this.dead = false;
                 this.renderX = this.x;
                 this.renderY = this.y;
@@ -490,6 +495,7 @@
                         }
                         
                         box.health--;
+                        if (box.health < 0) box.health = 0; // Ensure it doesn't go negative
                         totalCollisions++;
                         
                         const ballCenterX = this.renderX;
@@ -579,7 +585,7 @@
             }
             
             const secondsInPlay = timeInPlay / 60;
-            const speed = Math.pow(1.5, secondsInPlay * 3);
+            const speed = Math.pow(1.5, secondsInPlay * SPEED_ACCELERATION_RATE);
             
             return Math.min(speed, 2000);
         }
@@ -705,13 +711,11 @@
         document.addEventListener('keydown', (e) => {
             if (controlsDisabled) return;
             
-            const angleStep = Math.PI / 36;
-            
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                aimAngle -= angleStep;
+                aimAngle -= ANGLE_STEP;
                 e.preventDefault();
             } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                aimAngle += angleStep;
+                aimAngle += ANGLE_STEP;
                 e.preventDefault();
             } else if (e.key === ' ' || e.key === 'Enter') {
                 ballsToLaunch = ballCount;
