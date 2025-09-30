@@ -247,7 +247,7 @@
             playWallHit() {
                 if (!this.enabled) return;
                 this.wallHitCount++;
-                this.playCollisionSound('wall');
+                this.playSimpleCollisionSound('wall');
             }
             
             playBoxHit() {
@@ -260,6 +260,62 @@
                 this.enabled = !this.enabled;
                 const button = document.getElementById('audioToggle');
                 button.textContent = this.enabled ? '🔊 Audio On' : '🔇 Audio Off';
+            }
+            
+            playSimpleCollisionSound(type) {
+                if (!this.audioContext || this.activeSounds >= this.maxConcurrentSounds) {
+                    return;
+                }
+                
+                const sound = this.getAvailableSound();
+                if (!sound) return;
+                
+                sound.inUse = true;
+                this.activeSounds++;
+                
+                const now = this.audioContext.currentTime;
+                const intensityFactor = Math.min(this.intensity / 100, 1);
+                
+                // Create simple oscillator
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                // Connect audio graph through master gain node
+                oscillator.connect(gainNode);
+                if (this.masterGainNode) {
+                    gainNode.connect(this.masterGainNode);
+                } else {
+                    gainNode.connect(this.audioContext.destination);
+                }
+                
+                // Configure simple sound
+                const baseFreq = type === 'wall' ? 200 : 150;
+                const frequency = baseFreq + (intensityFactor * 100);
+                oscillator.frequency.setValueAtTime(frequency, now);
+                oscillator.type = 'sine';
+                
+                // Calculate normalized volume
+                const baseVolume = this.calculateNormalizedVolume();
+                const intensityVolume = baseVolume + (intensityFactor * (this.maxVolume - baseVolume));
+                const finalVolume = Math.min(intensityVolume, this.maxVolume);
+                
+                // Simple envelope
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(finalVolume, now + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                
+                // Play the sound
+                oscillator.start(now);
+                oscillator.stop(now + 0.1);
+                
+                // Clean up after sound finishes
+                oscillator.onended = () => {
+                    sound.inUse = false;
+                    this.activeSounds--;
+                };
+                
+                sound.oscillator = oscillator;
+                sound.gainNode = gainNode;
             }
             
             playCollisionSound(type) {
