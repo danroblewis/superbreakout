@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimized Breakout</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 30px;
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 3px solid #16213e;
+            background: #0f3460;
+            margin: 20px 0;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #c23b51;
+        }
+        .info {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin: 0;
+            max-width: 200px;
+        }
+        .stat {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            color: #e94560;
+            font-weight: bold;
+        }
+        .instructions {
+            max-width: 800px;
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            line-height: 1.6;
+        }
+        .speed-indicator {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .speed-gauge {
+            width: 150px;
+            height: 150px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .speed-gauge svg {
+            transform: rotate(-90deg);
+        }
+        .speed-label {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .speed-value {
+            font-size: 18px;
+            color: #4ecca3;
+            font-weight: bold;
+            text-align: center;
+            margin-top: -80px;
+            position: relative;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <div class="stat">
+            <div class="stat-label">BALLS</div>
+            <div class="stat-value" id="ballCount">1</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">BOXES REMAINING</div>
+            <div class="stat-value" id="boxCount">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">LEVEL</div>
+            <div class="stat-value" id="levelCount">1</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">TOTAL COLLISIONS</div>
+            <div class="stat-value" id="totalCollisions">0</div>
+        </div>
+        <div class="speed-indicator">
+            <div class="speed-label">SPEED</div>
+            <div class="speed-gauge">
+                <svg width="150" height="150" viewBox="0 0 150 150">
+                    <!-- Background arc -->
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#0f3460" stroke-width="12"/>
+                    <!-- Speed arc with gradient -->
+                    <defs>
+                        <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#4ecca3;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#e9a545;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <circle id="speedArc" cx="75" cy="75" r="60" fill="none" 
+                            stroke="url(#speedGradient)" stroke-width="12"
+                            stroke-dasharray="377" stroke-dashoffset="377"
+                            stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="speed-value" id="speedValue">1.0x</div>
+        </div>
+        
+        <button id="resetBtn">Reset Game</button>
+        
+        <div class="controls">
+            <label for="speedSlider" style="color: #eee;">Ball Speed:</label>
+            <input type="range" id="speedSlider" min="1" max="50" value="3" step="1" style="width: 150px;">
+            <span id="speedValue" style="color: #4ecca3;">3</span>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="490" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game constants
+        const GRID_COLS = 6;
+        const GRID_ROWS = 3;
+        const BOX_SIZE = 60;
+        const BOX_MARGIN = 5;
+        const GRID_OFFSET_X = 50;
+        const GRID_OFFSET_Y = 50;
+        const ROW_HEIGHT = BOX_SIZE + BOX_MARGIN;
+        
+        const CANVAS_WIDTH = GRID_OFFSET_X * 2 + GRID_COLS * (BOX_SIZE + BOX_MARGIN);
+        const CANVAS_HEIGHT = 600;
+        
+        let LAUNCH_X = CANVAS_WIDTH / 2;
+        let LAUNCH_Y = CANVAS_HEIGHT - 30;
+        
+        const BALL_RADIUS = 6;
+        
+        const ANGLE = -Math.PI / 4;
+        let SPEED = 3;
+        
+        // Tunable game parameters
+        const ANGLE_STEP = Math.PI / 72; // Aiming precision (smaller = finer control)
+        const BASE_SPEED_OFFSET = 15; // Added to slider speed value
+        const SPEED_ACCELERATION_RATE = 3; // How fast the game speeds up (higher = faster acceleration)
+        
+        // Aiming state
+        let isAiming = true;
+        let aimAngle = -Math.PI / 2;
+        
+        // Game state
+        let boxes = [];
+        let balls = [];
+        let totalCollisions = 0;
+        let currentSpeed = 1;
+        let collisionsThisFrame = 0;
+        let speedAccumulator = 1;
+        let timeInPlay = 0;
+        let lastLaunchTime = 0;
+        let currentLevel = 1;
+        let hadActiveBalls = false;
+        let lastBallX = null;
+        let ballCount = 1;
+        let ballsToLaunch = 0;
+        let launchTimer = 0;
+        let controlsDisabled = false;
+        let boxIdCounter = 0;
+        let maxSpeedReached = 50; // Track highest speed reached
+        
+        function initGame() {
+            boxes = [];
+            balls = [];
+            totalCollisions = 0;
+            currentSpeed = 1;
+            speedAccumulator = 1;
+            timeInPlay = 0;
+            lastLaunchTime = 0;
+            currentLevel = 1;
+            hadActiveBalls = false;
+            lastBallX = null;
+            ballCount = 1;
+            ballsToLaunch = 0;
+            launchTimer = 0;
+            controlsDisabled = false;
+            boxIdCounter = 0;
+            maxSpeedReached = 50;
+            
+            LAUNCH_X = CANVAS_WIDTH / 2;
+            LAUNCH_Y = CANVAS_HEIGHT - 30;
+            
+            // Generate initial 3 rows at different positions
+            for (let initialRow = 0; initialRow < 3; initialRow++) {
+                generateNewRow();
+                // Move all existing boxes down one row to make room for next
+                if (initialRow < 2) {
+                    for (let box of boxes) {
+                        box.row++;
+                        box.y += ROW_HEIGHT;
+                    }
+                }
+            }
+            
+            updateStats();
+        }
+        
+        function generateNewRow() {
+            const row = 0;
+            
+            // Decide how many boxes (0-6)
+            // Weighted towards fewer boxes
+            const rand = Math.random();
+            let numBoxes;
+            if (rand < 0.3) {
+                numBoxes = Math.floor(Math.random() * 3); // 0, 1, or 2
+            } else if (rand < 0.7) {
+                numBoxes = Math.floor(Math.random() * 2) + 3; // 3 or 4
+            } else {
+                numBoxes = Math.floor(Math.random() * 2) + 5; // 5 or 6
+            }
+            
+            // Choose unique random columns
+            const allColumns = [0, 1, 2, 3, 4, 5];
+            const shuffled = allColumns.sort(() => Math.random() - 0.5);
+            const selectedColumns = shuffled.slice(0, numBoxes);
+            
+            // Decide if we want a ball pickup (40% chance if space available)
+            const remainingColumns = shuffled.slice(numBoxes);
+            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.4;
+            let ballPickupCol = null;
+            
+            if (addBallPickup) {
+                ballPickupCol = remainingColumns[0]; // Take first remaining column
+            }
+            
+            // Create the boxes
+            const minHealth = 1;
+            const maxHealth = currentLevel;
+            
+            for (let col of selectedColumns) {
+                const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
+                const boxId = boxIdCounter++;
+                
+                boxes.push({
+                    id: boxId,
+                    col: col,
+                    row: row,
+                    x: GRID_OFFSET_X + col * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: health,
+                    maxHealth: maxHealth,
+                    isBallPickup: false
+                });
+            }
+            
+            // Add ball pickup if decided
+            if (ballPickupCol !== null) {
+                const pickupId = boxIdCounter++;
+                
+                boxes.push({
+                    id: pickupId,
+                    col: ballPickupCol,
+                    row: row,
+                    x: GRID_OFFSET_X + ballPickupCol * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: 1,
+                    maxHealth: 1,
+                    isBallPickup: true
+                });
+            }
+        }
+        
+        function dropBoxesAndAddRow() {
+            // First, move all boxes down
+            for (let box of boxes) {
+                box.row++;
+                box.y += ROW_HEIGHT;
+            }
+            
+            // Check for game over - if the TOP of any box goes below the launch point
+            const offScreenBoxes = boxes.filter(b => b.health > 0 && b.y > LAUNCH_Y);
+            if (offScreenBoxes.length > 0) {
+                alert('Game Over! Reached Level ' + currentLevel);
+                initGame();
+                return;
+            }
+            
+            currentLevel++;
+            generateNewRow();
+        }
+        
+        class Ball {
+            constructor(angle, delay = 0) {
+                this.delay = delay;
+                this.active = delay === 0;
+                this.x = LAUNCH_X;
+                this.y = LAUNCH_Y;
+                this.vx = Math.cos(angle) * (SPEED + BASE_SPEED_OFFSET);
+                this.vy = Math.sin(angle) * (SPEED + BASE_SPEED_OFFSET);
+                this.dead = false;
+                this.renderX = this.x;
+                this.renderY = this.y;
+                this.nextCollision = null;
+                this.distanceToCollision = 0;
+            }
+            
+            calculateNextCollision() {
+                let minTime = Infinity;
+                let collision = null;
+                
+                if (this.vx > 0) {
+                    const t = (CANVAS_WIDTH - BALL_RADIUS - this.x) / this.vx;
+                    if (t > 0 && t < minTime) {
+                        minTime = t;
+                        collision = { type: 'wall', side: 'right' };
+                    }
+                } else if (this.vx < 0) {
+                    const t = (BALL_RADIUS - this.x) / this.vx;
+                    if (t > 0 && t < minTime) {
+                        minTime = t;
+                        collision = { type: 'wall', side: 'left' };
+                    }
+                }
+                
+                if (this.vy < 0) {
+                    const t = (BALL_RADIUS - this.y) / this.vy;
+                    if (t > 0 && t < minTime) {
+                        minTime = t;
+                        collision = { type: 'wall', side: 'top' };
+                    }
+                } else if (this.vy > 0) {
+                    const t = (CANVAS_HEIGHT - this.y) / this.vy;
+                    if (t > 0 && t < minTime) {
+                        minTime = t;
+                        collision = { type: 'wall', side: 'bottom' };
+                    }
+                }
+                
+                for (let box of boxes) {
+                    if (box.health <= 0) continue;
+                    
+                    const boxCollision = this.rayBoxIntersection(box);
+                    if (boxCollision && boxCollision.t > 0 && boxCollision.t < minTime) {
+                        minTime = boxCollision.t;
+                        collision = { type: 'box', box: box, side: boxCollision.side };
+                    }
+                }
+                
+                return { time: minTime, collision: collision };
+            }
+            
+            rayBoxIntersection(box) {
+                let minT = -Infinity;
+                let maxT = Infinity;
+                let hitSide = null;
+                
+                const x1 = box.x - BALL_RADIUS;
+                const x2 = box.x + box.width + BALL_RADIUS;
+                const y1 = box.y - BALL_RADIUS;
+                const y2 = box.y + box.height + BALL_RADIUS;
+                
+                if (this.vx !== 0) {
+                    const t1 = (x1 - this.x) / this.vx;
+                    const t2 = (x2 - this.x) / this.vx;
+                    const tmin = Math.min(t1, t2);
+                    const tmax = Math.max(t1, t2);
+                    
+                    if (tmin > minT) {
+                        minT = tmin;
+                        hitSide = this.vx > 0 ? 'left' : 'right';
+                    }
+                    maxT = Math.min(maxT, tmax);
+                } else {
+                    if (this.x < x1 || this.x > x2) return null;
+                }
+                
+                if (this.vy !== 0) {
+                    const t1 = (y1 - this.y) / this.vy;
+                    const t2 = (y2 - this.y) / this.vy;
+                    const tmin = Math.min(t1, t2);
+                    const tmax = Math.max(t1, t2);
+                    
+                    if (tmin > minT) {
+                        minT = tmin;
+                        hitSide = this.vy > 0 ? 'top' : 'bottom';
+                    }
+                    maxT = Math.min(maxT, tmax);
+                } else {
+                    if (this.y < y1 || this.y > y2) return null;
+                }
+                
+                if (minT > maxT || maxT < 0) return null;
+                
+                return { t: minT, side: hitSide };
+            }
+            
+            update(numCollisions) {
+                if (this.delay > 0) {
+                    this.delay -= numCollisions;
+                    if (this.delay <= 0) {
+                        this.active = true;
+                        this.delay = 0;
+                    }
+                    return;
+                }
+                
+                if (!this.active || this.dead) return;
+                
+                for (let i = 0; i < numCollisions; i++) {
+                    if (this.dead) break;
+                    
+                    const next = this.calculateNextCollision();
+                    
+                    if (!next.collision || next.time === Infinity) {
+                        this.x += this.vx * 10;
+                        this.y += this.vy * 10;
+                        this.renderX = this.x;
+                        this.renderY = this.y;
+                        continue;
+                    }
+                    
+                    this.x += this.vx * next.time;
+                    this.y += this.vy * next.time;
+                    
+                    if (next.collision.type === 'wall') {
+                        if (next.collision.side === 'bottom') {
+                            lastBallX = this.x;
+                            this.dead = true;
+                            return;
+                        } else if (next.collision.side === 'left' || next.collision.side === 'right') {
+                            this.vx = -this.vx;
+                        } else if (next.collision.side === 'top') {
+                            this.vy = -this.vy;
+                        }
+                    } else if (next.collision.type === 'box') {
+                        const box = next.collision.box;
+                        
+                        if (box.isBallPickup) {
+                            box.health = 0;
+                            ballCount++;
+                        } else {
+                            box.health--;
+                            totalCollisions++;
+                            
+                            if (next.collision.side === 'left' || next.collision.side === 'right') {
+                                this.vx = -this.vx;
+                            } else {
+                                this.vy = -this.vy;
+                            }
+                        }
+                    }
+                }
+                
+                this.renderX = this.x;
+                this.renderY = this.y;
+            }
+            
+            updateRenderPosition(speed) {
+                if (!this.active || this.dead) return;
+                
+                this.renderX += this.vx;
+                this.renderY += this.vy;
+                
+                if (this.renderX - BALL_RADIUS < 0) {
+                    this.renderX = BALL_RADIUS;
+                    this.vx = Math.abs(this.vx);
+                } else if (this.renderX + BALL_RADIUS > CANVAS_WIDTH) {
+                    this.renderX = CANVAS_WIDTH - BALL_RADIUS;
+                    this.vx = -Math.abs(this.vx);
+                }
+                
+                if (this.renderY - BALL_RADIUS < 0) {
+                    this.renderY = BALL_RADIUS;
+                    this.vy = Math.abs(this.vy);
+                } else if (this.renderY > CANVAS_HEIGHT) {
+                    lastBallX = this.renderX;
+                    this.dead = true;
+                    return;
+                }
+                
+                for (let box of boxes) {
+                    if (box.health <= 0) continue;
+                    
+                    if (this.renderX + BALL_RADIUS > box.x &&
+                        this.renderX - BALL_RADIUS < box.x + box.width &&
+                        this.renderY + BALL_RADIUS > box.y &&
+                        this.renderY - BALL_RADIUS < box.y + box.height) {
+                        
+                        if (box.isBallPickup) {
+                            box.health = 0;
+                            ballCount++;
+                            return;
+                        }
+                        
+                        box.health--;
+                        if (box.health < 0) box.health = 0;
+                        totalCollisions++;
+                        
+                        // Only bounce if box still has health or just died
+                        const ballCenterX = this.renderX;
+                        const ballCenterY = this.renderY;
+                        const boxCenterX = box.x + box.width / 2;
+                        const boxCenterY = box.y + box.height / 2;
+                        
+                        const dx = ballCenterX - boxCenterX;
+                        const dy = ballCenterY - boxCenterY;
+                        
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            this.vx = -this.vx;
+                            if (dx > 0) {
+                                this.renderX = box.x + box.width + BALL_RADIUS;
+                            } else {
+                                this.renderX = box.x - BALL_RADIUS;
+                            }
+                        } else {
+                            this.vy = -this.vy;
+                            if (dy > 0) {
+                                this.renderY = box.y + box.height + BALL_RADIUS;
+                            } else {
+                                this.renderY = box.y - BALL_RADIUS;
+                            }
+                        }
+                        
+                        this.x = this.renderX;
+                        this.y = this.renderY;
+                        
+                        return;
+                    }
+                }
+            }
+            
+            draw() {
+                if (!this.active || this.dead) return;
+                
+                ctx.beginPath();
+                ctx.arc(this.renderX, this.renderY, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = '#4ecca3';
+                ctx.fill();
+                ctx.strokeStyle = '#45b393';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+        
+        function drawBoxes() {
+            for (let box of boxes) {
+                if (box.health <= 0) continue;
+                
+                if (box.isBallPickup) {
+                    ctx.beginPath();
+                    ctx.arc(box.x + box.width/2, box.y + box.height/2, box.width/2 - 5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fill();
+                    ctx.strokeStyle = '#4ecca3';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#0f3460';
+                    ctx.font = 'bold 18px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('+1', box.x + box.width/2, box.y + box.height/2);
+                } else {
+                    const healthPercent = box.health / box.maxHealth;
+                    const hue = healthPercent * 120;
+                    ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                    ctx.fillRect(box.x, box.y, box.width, box.height);
+                    
+                    // Draw outline
+                    ctx.strokeStyle = '#16213e';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(box.x, box.y, box.width, box.height);
+                    
+                    // Draw health number in center
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 20px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(box.health, box.x + box.width/2, box.y + box.height/2);
+                    
+                    // Draw ID in bottom left corner
+                    ctx.fillStyle = 'yellow';
+                    ctx.font = 'bold 12px Courier New';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('ID:' + box.id, box.x + 3, box.y + box.height - 3);
+                }
+            }
+        }
+        
+        function calculateSpeed() {
+            const activeBalls = balls.filter(b => b.active && !b.dead).length;
+            
+            if (activeBalls === 0) {
+                timeInPlay = 0;
+                return 1;
+            }
+            
+            const secondsInPlay = timeInPlay / 60;
+            const speed = Math.pow(1.5, secondsInPlay * SPEED_ACCELERATION_RATE);
+            
+            return Math.min(speed, 2000);
+        }
+        
+        function gameLoop() {
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            // Handle sequential ball launching
+            if (ballsToLaunch > 0) {
+                launchTimer++;
+                if (launchTimer >= 5) {
+                    const newBall = new Ball(aimAngle, 0);
+                    balls.push(newBall);
+                    ballsToLaunch--;
+                    launchTimer = 0;
+                }
+            }
+            
+            const activeBalls = balls.filter(b => b.active && !b.dead).length;
+            
+            if (hadActiveBalls && activeBalls === 0 && ballsToLaunch === 0) {
+                if (lastBallX !== null) {
+                    LAUNCH_X = lastBallX;
+                    LAUNCH_Y = CANVAS_HEIGHT - 30;
+                }
+                
+                dropBoxesAndAddRow();
+                balls = [];
+                hadActiveBalls = false;
+                controlsDisabled = false;
+            }
+            
+            if (activeBalls > 0) {
+                timeInPlay++;
+                hadActiveBalls = true;
+            }
+            
+            currentSpeed = calculateSpeed();
+            
+            const ANALYTICAL_THRESHOLD = 50;
+            
+            if (currentSpeed < ANALYTICAL_THRESHOLD) {
+                const stepsThisFrame = Math.floor(currentSpeed);
+                collisionsThisFrame = 0;
+                
+                for (let step = 0; step < stepsThisFrame; step++) {
+                    for (let ball of balls) {
+                        ball.updateRenderPosition(currentSpeed);
+                    }
+                }
+            } else {
+                collisionsThisFrame = Math.max(1, Math.floor(currentSpeed / 10));
+                for (let ball of balls) {
+                    ball.update(collisionsThisFrame);
+                }
+            }
+            
+            balls = balls.filter(b => !b.dead);
+            
+            drawBoxes();
+            for (let ball of balls) {
+                ball.draw();
+            }
+            
+            ctx.beginPath();
+            ctx.arc(LAUNCH_X, LAUNCH_Y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#e94560';
+            ctx.fill();
+            
+            if (isAiming && !controlsDisabled) {
+                const arrowLength = 100;
+                const endX = LAUNCH_X + Math.cos(aimAngle) * arrowLength;
+                const endY = LAUNCH_Y + Math.sin(aimAngle) * arrowLength;
+                
+                ctx.strokeStyle = '#4ecca3';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(LAUNCH_X, LAUNCH_Y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                const headlen = 10;
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - headlen * Math.cos(aimAngle - Math.PI / 6),
+                    endY - headlen * Math.sin(aimAngle - Math.PI / 6)
+                );
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                    endX - headlen * Math.cos(aimAngle + Math.PI / 6),
+                    endY - headlen * Math.sin(aimAngle + Math.PI / 6)
+                );
+                ctx.stroke();
+            }
+            
+            updateStats();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function updateStats() {
+            const activeBalls = balls.filter(b => b.active && !b.dead).length;
+            const remainingBoxes = boxes.filter(b => b.health > 0 && !b.isBallPickup).length;
+            
+            document.getElementById('ballCount').textContent = ballCount;
+            document.getElementById('boxCount').textContent = remainingBoxes;
+            document.getElementById('levelCount').textContent = currentLevel;
+            document.getElementById('totalCollisions').textContent = totalCollisions.toLocaleString();
+            
+            // Update max speed reached
+            if (currentSpeed > maxSpeedReached) {
+                maxSpeedReached = currentSpeed;
+            }
+            
+            // Update radial speed gauge
+            const speedPercent = Math.min(currentSpeed / maxSpeedReached, 1);
+            const circumference = 2 * Math.PI * 60; // radius = 60
+            const offset = circumference * (1 - speedPercent);
+            document.getElementById('speedArc').style.strokeDashoffset = offset;
+            document.getElementById('speedValue').textContent = currentSpeed.toFixed(1) + 'x';
+            
+            // Change color based on speed
+            const speedColor = speedPercent < 0.3 ? '#4ecca3' : 
+                               speedPercent < 0.7 ? '#e9a545' : '#e94560';
+            document.getElementById('speedValue').style.color = speedColor;
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (controlsDisabled) return;
+            
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                aimAngle -= ANGLE_STEP;
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                aimAngle += ANGLE_STEP;
+                e.preventDefault();
+            } else if (e.key === ' ' || e.key === 'Enter') {
+                ballsToLaunch = ballCount;
+                launchTimer = 0;
+                controlsDisabled = true;
+                hadActiveBalls = false;
+                timeInPlay = 0;
+                e.preventDefault();
+            }
+            
+            const minAngle = -Math.PI + 0.01;
+            const maxAngle = -0.01;
+            
+            if (aimAngle > maxAngle) {
+                aimAngle = maxAngle;
+            } else if (aimAngle < minAngle) {
+                aimAngle = minAngle;
+            }
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            initGame();
+        });
+        
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        
+        speedSlider.addEventListener('input', (e) => {
+            SPEED = parseFloat(e.target.value);
+            speedValue.textContent = SPEED;
+        });
+        
+        initGame();
+        gameLoop();
+    </script>
+</body>
+</html>
