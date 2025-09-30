@@ -1292,10 +1292,7 @@
             
             const ANALYTICAL_THRESHOLD = 10;
             
-            // Don't switch to analytical mode if we have balls left to launch
-            const shouldUseAnalytical = currentSpeed >= ANALYTICAL_THRESHOLD && ballsToLaunch === 0;
-            
-            if (!shouldUseAnalytical) {
+            if (currentSpeed < ANALYTICAL_THRESHOLD) {
                 const stepsThisFrame = Math.max(1, Math.ceil(currentSpeed));
                 collisionsThisFrame = 0;
                 
