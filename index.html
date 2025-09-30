@@ -192,8 +192,8 @@
                 this.maxVolume = 0.15; // Reduced from 0.4 to prevent clipping
                 
                 // Volume controls (0-100)
-                this.sfxVolume = 80;
-                this.musicVolume = 20;
+                this.sfxVolume = 70;
+                this.musicVolume = 30;
                 this.musicEnabled = true;
                 
                 // Music system
@@ -492,16 +492,16 @@
             }
             
             generateMelody() {
-                // Generate a simple melody based on game state
-                const scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]; // C major scale
+                // Generate a simple melody using Lydian scale for bright, uplifting sound
+                const scale = [261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25]; // C Lydian scale (C, D, E, F#, G, A, B, C)
                 const melody = [];
                 const numNotes = 8 + Math.floor(Math.random() * 4); // 8-12 notes
                 
                 for (let i = 0; i < numNotes; i++) {
                     const noteIndex = Math.floor(Math.random() * scale.length);
-                    const octave = Math.random() < 0.3 ? 2 : 1; // Sometimes go up an octave
+                    const octave = Math.random() < 0.3 ? 0.75 : 1; // Occasionally go down a bit instead of up
                     const frequency = scale[noteIndex] * octave;
-                    const duration = 0.5 + Math.random() * 1.0; // 0.5-1.5 seconds
+                    const duration = 0.3 + Math.random() * 0.6; // 0.3-0.9 seconds
                     
                     melody.push({
                         frequency: frequency,
@@ -573,6 +573,9 @@
             playMelodyNote(note) {
                 if (!this.audioContext) return;
                 
+                // Log the note being played
+                console.log(`🎵 Playing note: ${note.frequency.toFixed(2)}Hz for ${note.duration.toFixed(2)}s`);
+                
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
                 
@@ -582,11 +585,11 @@
                 oscillator.frequency.setValueAtTime(note.frequency, this.audioContext.currentTime);
                 oscillator.type = 'sine';
                 
-                // Gentle envelope
+                // Gentle envelope with reduced timing
                 const volume = 0.1 * (this.musicVolume / 100);
                 gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
-                gainNode.gain.exponentialRampToValueAtTime(volume * 0.3, this.audioContext.currentTime + note.duration - 0.1);
+                gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.05);
+                gainNode.gain.exponentialRampToValueAtTime(volume * 0.3, this.audioContext.currentTime + note.duration - 0.05);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + note.duration);
                 
                 oscillator.start(this.audioContext.currentTime);
