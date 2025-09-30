@@ -803,6 +803,8 @@
         let autoshootTimer = 0;
         let fieldClearedLastShot = false;
         let analyticalThreshold = INITIAL_ANALYTICAL_THRESHOLD;
+        let originalAimAngle = -Math.PI / 2;
+        let mouseDown = false;
         
         function initGame() {
             boxes = [];
@@ -812,10 +814,10 @@
             speedAccumulator = 1;
             timeInPlay = 0;
             lastLaunchTime = 0;
-            currentLevel = 1;
+            currentLevel = 100;
             hadActiveBalls = false;
             lastBallX = null;
-            ballCount = 1;
+            ballCount = 100;
             ballsToLaunch = 0;
             launchTimer = 0;
             controlsDisabled = false;
@@ -1312,6 +1314,12 @@
             return Math.max(0, INITIAL_ANALYTICAL_THRESHOLD - ballCount);
         }
         
+        function calculateAngleFromMouse(mouseX, mouseY) {
+            const dx = mouseX - LAUNCH_X;
+            const dy = mouseY - LAUNCH_Y;
+            return Math.atan2(dy, dx);
+        }
+        
         function gameLoop() {
             ctx.fillStyle = '#0f3460';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1533,6 +1541,63 @@
         
         document.getElementById('musicToggle').addEventListener('click', () => {
             audioSystem.toggleMusic();
+        });
+        
+        // Mouse controls for temporary angle adjustment (works even when controls disabled)
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Store original angle and set mouse down flag
+            originalAimAngle = aimAngle;
+            mouseDown = true;
+            
+            // Calculate new angle from mouse position
+            const newAngle = calculateAngleFromMouse(mouseX, mouseY);
+            
+            // Apply angle limits
+            const minAngle = (MIN_ANGLE_DEGREES - 180) * Math.PI / 180;
+            const maxAngle = (MAX_ANGLE_DEGREES - 180) * Math.PI / 180;
+            
+            if (newAngle >= minAngle && newAngle <= maxAngle) {
+                aimAngle = newAngle;
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!mouseDown) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate new angle from mouse position
+            const newAngle = calculateAngleFromMouse(mouseX, mouseY);
+            
+            // Apply angle limits
+            const minAngle = (MIN_ANGLE_DEGREES - 180) * Math.PI / 180;
+            const maxAngle = (MAX_ANGLE_DEGREES - 180) * Math.PI / 180;
+            
+            if (newAngle >= minAngle && newAngle <= maxAngle) {
+                aimAngle = newAngle;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            if (mouseDown) {
+                // Reset to original angle when mouse is released
+                aimAngle = originalAimAngle;
+                mouseDown = false;
+            }
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            if (mouseDown) {
+                // Reset to original angle if mouse leaves canvas
+                aimAngle = originalAimAngle;
+                mouseDown = false;
+            }
         });
         
         document.getElementById('autoshootToggle').addEventListener('click', () => {
