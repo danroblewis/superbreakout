@@ -1003,9 +1003,7 @@
             // Check for game over - if the TOP of any box goes below the launch point
             const offScreenBoxes = boxes.filter(b => b.health > 0 && b.y > LAUNCH_Y);
             if (offScreenBoxes.length > 0) {
-                if (!autoshootEnabled) {
-                    alert('Game Over! Reached Level ' + currentLevel);
-                }
+                alert('Game Over! Reached Level ' + currentLevel);
                 console.log('Game Over! Reached Level ' + currentLevel);
                 initGame();
                 return;
