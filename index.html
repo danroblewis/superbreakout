@@ -113,6 +113,39 @@
             gap: 10px;
             margin: 10px 0;
         }
+        .autoshoot-button {
+            position: absolute;
+            right: -70px; /* Partially visible for hover */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 80px;
+            height: 50px;
+            border-radius: 15px;
+            background: rgba(233, 69, 96, 0.02);
+            color: #e94560;
+            /* border: 2px solid #e94560; */
+            font-size: 20px;
+            font-weight: normal;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            z-index: 100;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .autoshoot-button:hover {
+            right: 20px; /* Slide in on hover */
+            background: rgba(233, 69, 96, 0.8);
+            transform: translateY(-50%) scale(1.05);
+        }
+        .autoshoot-button.active {
+            background: #e94560;
+            color: white;
+        }
+        .autoshoot-button.active:hover {
+            background: #c23b51;
+        }
     </style>
 </head>
 <body>
@@ -165,6 +198,7 @@
 
     <div class="game-container">
         <canvas id="gameCanvas" width="490" height="600"></canvas>
+        <button id="autoshootToggle" class="autoshoot-button">🤖</button>
     </div>
 
     <script>
@@ -697,6 +731,8 @@
         let controlsDisabled = false;
         let boxIdCounter = 0;
         let maxSpeedReached = 20; // Track highest speed reached
+        let autoshootEnabled = false;
+        let autoshootTimer = 0;
         
         function initGame() {
             boxes = [];
@@ -1158,6 +1194,20 @@
                 }
             }
             
+            // Handle autoshoot
+            if (autoshootEnabled && !controlsDisabled && ballsToLaunch === 0) {
+                autoshootTimer++;
+                if (autoshootTimer >= 60) { // 1000ms at 60fps
+                    // Trigger shoot action
+                    ballsToLaunch = ballCount;
+                    launchTimer = 0;
+                    controlsDisabled = true;
+                    hadActiveBalls = false;
+                    timeInPlay = 0;
+                    autoshootTimer = 0;
+                }
+            }
+            
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
             
             if (hadActiveBalls && activeBalls === 0 && ballsToLaunch === 0) {
@@ -1307,6 +1357,13 @@
         
         document.getElementById('musicToggle').addEventListener('click', () => {
             audioSystem.toggleMusic();
+        });
+        
+        document.getElementById('autoshootToggle').addEventListener('click', () => {
+            autoshootEnabled = !autoshootEnabled;
+            const button = document.getElementById('autoshootToggle');
+            button.classList.toggle('active', autoshootEnabled);
+            autoshootTimer = 0; // Reset timer when toggling
         });
         
         // Start audio context on first user interaction
