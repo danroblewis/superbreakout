@@ -666,9 +666,6 @@
             playMelodyNote(note) {
                 if (!this.audioContext) return;
                 
-                // Log the note being played
-                console.log(`🎵 Playing note: ${note.frequency.toFixed(2)}Hz for ${note.duration.toFixed(2)}s`);
-                
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
                 
@@ -805,6 +802,8 @@
         let analyticalThreshold = INITIAL_ANALYTICAL_THRESHOLD;
         let originalAimAngle = -Math.PI / 2;
         let mouseDown = false;
+        let punishmentRowCount = 1;
+        let consecutiveClears = 0;
         
         function initGame() {
             boxes = [];
@@ -814,15 +813,17 @@
             speedAccumulator = 1;
             timeInPlay = 0;
             lastLaunchTime = 0;
-            currentLevel = 100;
+            currentLevel = 1;
             hadActiveBalls = false;
             lastBallX = null;
-            ballCount = 100;
+            ballCount = 1;
             ballsToLaunch = 0;
             launchTimer = 0;
             controlsDisabled = false;
             boxIdCounter = 0;
             maxSpeedReached = 20;
+            punishmentRowCount = 1;
+            consecutiveClears = 0;
             
             LAUNCH_X = CANVAS_WIDTH / 2;
             LAUNCH_Y = CANVAS_HEIGHT - 30;
@@ -913,6 +914,72 @@
                 
                 boxes.push({
                     id: pickupId,
+                    col: ballPickupCol,
+                    row: row,
+                    x: GRID_OFFSET_X + ballPickupCol * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: 1,
+                    maxHealth: 1,
+                    isBallPickup: true
+                });
+            }
+        }
+        
+        function generateNewRowAtPosition(rowPosition) {
+            const row = rowPosition;
+            
+            // Decide how many boxes (1-6, ensuring at least 1)
+            // Weighted towards fewer boxes
+            const rand = Math.random();
+            let numBoxes;
+            if (rand < 0.3) {
+                numBoxes = Math.floor(Math.random() * 2) + 1; // 1 or 2
+            } else if (rand < 0.7) {
+                numBoxes = Math.floor(Math.random() * 2) + 3; // 3 or 4
+            } else {
+                numBoxes = Math.floor(Math.random() * 2) + 5; // 5 or 6
+            }
+            
+            // Choose unique random columns
+            const allColumns = [0, 1, 2, 3, 4, 5];
+            const shuffled = allColumns.sort(() => Math.random() - 0.5);
+            const selectedColumns = shuffled.slice(0, numBoxes);
+            
+            // Decide if we want a ball pickup (60% chance if space available and field wasn't cleared last shot)
+            const remainingColumns = shuffled.slice(numBoxes);
+            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.6 && !fieldClearedLastShot;
+            let ballPickupCol = null;
+            
+            if (addBallPickup) {
+                ballPickupCol = remainingColumns[0]; // Take first remaining column
+            }
+            
+            // Create the boxes
+            for (let col of selectedColumns) {
+                const maxHealth = BOX_HEALTH_MODE === 'ballcount' ? ballCount + 1 : currentLevel + 1;
+                const minHealth = BOX_HEALTH_MODE === 'ballcount' ? Math.max(1, ballCount) : Math.max(1, currentLevel);
+                const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
+                
+                boxes.push({
+                    id: boxIdCounter++,
+                    col: col,
+                    row: row,
+                    x: GRID_OFFSET_X + col * (BOX_SIZE + BOX_MARGIN),
+                    y: GRID_OFFSET_Y + row * ROW_HEIGHT,
+                    width: BOX_SIZE,
+                    height: BOX_SIZE,
+                    health: health,
+                    maxHealth: maxHealth,
+                    isBallPickup: false
+                });
+            }
+            
+            // Add ball pickup if decided
+            if (addBallPickup) {
+                boxes.push({
+                    id: boxIdCounter++,
                     col: ballPickupCol,
                     row: row,
                     x: GRID_OFFSET_X + ballPickupCol * (BOX_SIZE + BOX_MARGIN),
@@ -1356,12 +1423,52 @@
                 const remainingBoxes = boxes.filter(b => b.health > 0 && !b.isBallPickup).length;
                 fieldClearedLastShot = (remainingBoxes === 0);
                 
+                // Handle punishment system for consecutive clears
+                let shouldAddPunishmentRows = false;
+                if (remainingBoxes === 0) {
+                    consecutiveClears++;
+                    if (consecutiveClears >= 2) {
+                        shouldAddPunishmentRows = true;
+                        console.log(`Punishment! Will add ${punishmentRowCount} extra rows. Punishment level: ${punishmentRowCount + 1}`);
+                    }
+                } else {
+                    // Reset consecutive clears if field wasn't cleared
+                    consecutiveClears = 0;
+                }
+                
                 if (lastBallX !== null) {
                     LAUNCH_X = lastBallX;
                     LAUNCH_Y = CANVAS_HEIGHT - 30;
                 }
                 
-                dropBoxesAndAddRow();
+                if (shouldAddPunishmentRows) {
+                    // Drop existing boxes first
+                    for (let box of boxes) {
+                        box.row++;
+                        box.y += ROW_HEIGHT;
+                    }
+                    
+                    // Check for game over
+                    const offScreenBoxes = boxes.filter(b => b.health > 0 && b.y > LAUNCH_Y);
+                    if (offScreenBoxes.length > 0) {
+                        if (!autoshootEnabled) {
+                            alert('Game Over! Reached Level ' + currentLevel);
+                        }
+                        console.log('Game Over! Reached Level ' + currentLevel);
+                        initGame();
+                        return;
+                    }
+                    
+                    // Now add punishment rows at the top
+                    for (let i = 0; i < punishmentRowCount; i++) {
+                        generateNewRowAtPosition(i);
+                    }
+                    punishmentRowCount = Math.min(punishmentRowCount + 1, 9);
+                    currentLevel++;
+                } else {
+                    // Normal behavior - drop boxes and add one new row
+                    dropBoxesAndAddRow();
+                }
                 balls = [];
                 hadActiveBalls = false;
                 controlsDisabled = false;
@@ -1543,8 +1650,10 @@
             audioSystem.toggleMusic();
         });
         
-        // Mouse controls for temporary angle adjustment (works even when controls disabled)
+        // Mouse controls for temporary angle adjustment (available after level 60)
         canvas.addEventListener('mousedown', (e) => {
+            if (currentLevel < 60) return;
+            
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -1566,7 +1675,7 @@
         });
         
         canvas.addEventListener('mousemove', (e) => {
-            if (!mouseDown) return;
+            if (currentLevel < 60 || !mouseDown) return;
             
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -1585,19 +1694,19 @@
         });
         
         canvas.addEventListener('mouseup', () => {
-            if (mouseDown) {
-                // Reset to original angle when mouse is released
-                aimAngle = originalAimAngle;
-                mouseDown = false;
-            }
+            if (currentLevel < 60 || !mouseDown) return;
+            
+            // Reset to original angle when mouse is released
+            aimAngle = originalAimAngle;
+            mouseDown = false;
         });
         
         canvas.addEventListener('mouseleave', () => {
-            if (mouseDown) {
-                // Reset to original angle if mouse leaves canvas
-                aimAngle = originalAimAngle;
-                mouseDown = false;
-            }
+            if (currentLevel < 60 || !mouseDown) return;
+            
+            // Reset to original angle if mouse leaves canvas
+            aimAngle = originalAimAngle;
+            mouseDown = false;
         });
         
         document.getElementById('autoshootToggle').addEventListener('click', () => {
