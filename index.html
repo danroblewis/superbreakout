@@ -60,6 +60,13 @@
             border-radius: 8px;
             text-align: center;
         }
+        .stat-row {
+            display: flex;
+            gap: 10px;
+        }
+        .stat-row .stat {
+            flex: 1;
+        }
         .stat-label {
             font-size: 12px;
             color: #aaa;
@@ -192,9 +199,15 @@
             <div class="stat-label">LEVEL</div>
             <div class="stat-value" id="levelCount">1</div>
         </div>
-        <div class="stat">
-            <div class="stat-label">BALLS</div>
-            <div class="stat-value" id="ballCount">1</div>
+        <div class="stat-row">
+            <div class="stat">
+                <div class="stat-label">BALLS</div>
+                <div class="stat-value" id="ballCount">1</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">TO SHOOT</div>
+                <div class="stat-value" id="ballsToShoot">1</div>
+            </div>
         </div>
         <div class="stat">
             <div class="stat-label">MAX SPEED</div>
@@ -1417,6 +1430,7 @@
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
             
             document.getElementById('ballCount').textContent = ballCount;
+            document.getElementById('ballsToShoot').textContent = ballsToLaunch;
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
             
