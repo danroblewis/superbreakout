@@ -85,12 +85,13 @@
         }
         .speed-gauge {
             width: 150px;
-            height: 150px;
+            height: 85px;
             margin: 0 auto;
             position: relative;
+            overflow: hidden;
         }
         .speed-gauge svg {
-            transform: rotate(-90deg);
+            transform: rotate(0deg);
         }
         .speed-label {
             font-size: 12px;
@@ -103,7 +104,7 @@
             color: #4ecca3;
             font-weight: bold;
             text-align: center;
-            margin-top: -80px;
+            margin-top: 5px;
             position: relative;
             z-index: 10;
         }
@@ -124,15 +125,15 @@
             <div class="stat-value" id="levelCount">1</div>
         </div>
         <div class="stat">
-            <div class="stat-label">TOTAL COLLISIONS</div>
-            <div class="stat-value" id="totalCollisions">0</div>
+            <div class="stat-label">MAX SPEED</div>
+            <div class="stat-value" id="maxSpeed">20</div>
         </div>
         <div class="speed-indicator">
             <div class="speed-label">SPEED</div>
             <div class="speed-gauge">
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                    <!-- Background arc -->
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#0f3460" stroke-width="12"/>
+                <svg width="150" height="85" viewBox="0 0 150 85">
+                    <!-- Background arc (semicircle) -->
+                    <path d="M 15 75 A 60 60 0 0 1 135 75" fill="none" stroke="#0f3460" stroke-width="12" stroke-linecap="round"/>
                     <!-- Speed arc with gradient -->
                     <defs>
                         <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -141,22 +142,16 @@
                             <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
                         </linearGradient>
                     </defs>
-                    <circle id="speedArc" cx="75" cy="75" r="60" fill="none" 
-                            stroke="url(#speedGradient)" stroke-width="12"
-                            stroke-dasharray="377" stroke-dashoffset="377"
-                            stroke-linecap="round"/>
+                    <path id="speedArc" d="M 15 75 A 60 60 0 0 1 135 75" fill="none" 
+                          stroke="url(#speedGradient)" stroke-width="12"
+                          stroke-dasharray="188.5" stroke-dashoffset="188.5"
+                          stroke-linecap="round"/>
                 </svg>
             </div>
             <div class="speed-value" id="speedValue">1.0x</div>
         </div>
         
         <button id="resetBtn">Reset Game</button>
-        
-        <div class="controls">
-            <label for="speedSlider" style="color: #eee;">Ball Speed:</label>
-            <input type="range" id="speedSlider" min="1" max="50" value="3" step="1" style="width: 150px;">
-            <span id="speedValue" style="color: #4ecca3;">3</span>
-        </div>
     </div>
 
     <div class="game-container">
@@ -190,7 +185,8 @@
         // Tunable game parameters
         const ANGLE_STEP = Math.PI / 72; // Aiming precision (smaller = finer control)
         const BASE_SPEED_OFFSET = 15; // Added to slider speed value
-        const SPEED_ACCELERATION_RATE = 3; // How fast the game speeds up (higher = faster acceleration)
+        const SPEED_ACCELERATION_RATE = 2; // How fast the game speeds up (higher = faster acceleration)
+        const SPEED_ACCELERATION_BASE = 1.2; // Base for exponential speed growth
         
         // Aiming state
         let isAiming = true;
@@ -213,7 +209,7 @@
         let launchTimer = 0;
         let controlsDisabled = false;
         let boxIdCounter = 0;
-        let maxSpeedReached = 50; // Track highest speed reached
+        let maxSpeedReached = 20; // Track highest speed reached
         
         function initGame() {
             boxes = [];
@@ -231,7 +227,7 @@
             launchTimer = 0;
             controlsDisabled = false;
             boxIdCounter = 0;
-            maxSpeedReached = 50;
+            maxSpeedReached = 20;
             
             LAUNCH_X = CANVAS_WIDTH / 2;
             LAUNCH_Y = CANVAS_HEIGHT - 30;
@@ -271,9 +267,9 @@
             const shuffled = allColumns.sort(() => Math.random() - 0.5);
             const selectedColumns = shuffled.slice(0, numBoxes);
             
-            // Decide if we want a ball pickup (40% chance if space available)
+            // Decide if we want a ball pickup (60% chance if space available)
             const remainingColumns = shuffled.slice(numBoxes);
-            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.4;
+            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.6;
             let ballPickupCol = null;
             
             if (addBallPickup) {
@@ -281,7 +277,7 @@
             }
             
             // Create the boxes
-            const minHealth = 1;
+            const minHealth = Math.max(1, currentLevel - 2); // Within 2 of max
             const maxHealth = currentLevel;
             
             for (let col of selectedColumns) {
@@ -612,8 +608,10 @@
                     ctx.textBaseline = 'middle';
                     ctx.fillText('+1', box.x + box.width/2, box.y + box.height/2);
                 } else {
-                    const healthPercent = box.health / box.maxHealth;
-                    const hue = healthPercent * 120;
+                    // Color based on health relative to current level (not box's maxHealth)
+                    // Handle edge case when currentLevel is 1
+                    const healthPercent = currentLevel > 1 ? (box.health - 1) / (currentLevel - 1) : 0;
+                    const hue = (1 - healthPercent) * 120; // Invert: low health = red (0), high health = green (120)
                     ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
                     ctx.fillRect(box.x, box.y, box.width, box.height);
                     
@@ -628,13 +626,6 @@
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(box.health, box.x + box.width/2, box.y + box.height/2);
-                    
-                    // Draw ID in bottom left corner
-                    ctx.fillStyle = 'yellow';
-                    ctx.font = 'bold 12px Courier New';
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'bottom';
-                    ctx.fillText('ID:' + box.id, box.x + 3, box.y + box.height - 3);
                 }
             }
         }
@@ -648,7 +639,7 @@
             }
             
             const secondsInPlay = timeInPlay / 60;
-            const speed = Math.pow(1.5, secondsInPlay * SPEED_ACCELERATION_RATE);
+            const speed = Math.pow(SPEED_ACCELERATION_BASE, secondsInPlay * SPEED_ACCELERATION_RATE);
             
             return Math.min(speed, 2000);
         }
@@ -757,17 +748,17 @@
             document.getElementById('ballCount').textContent = ballCount;
             document.getElementById('boxCount').textContent = remainingBoxes;
             document.getElementById('levelCount').textContent = currentLevel;
-            document.getElementById('totalCollisions').textContent = totalCollisions.toLocaleString();
+            document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
             
             // Update max speed reached
             if (currentSpeed > maxSpeedReached) {
                 maxSpeedReached = currentSpeed;
             }
             
-            // Update radial speed gauge
+            // Update radial speed gauge (semicircle)
             const speedPercent = Math.min(currentSpeed / maxSpeedReached, 1);
-            const circumference = 2 * Math.PI * 60; // radius = 60
-            const offset = circumference * (1 - speedPercent);
+            const arcLength = Math.PI * 60; // Half circumference (semicircle)
+            const offset = arcLength * (1 - speedPercent);
             document.getElementById('speedArc').style.strokeDashoffset = offset;
             document.getElementById('speedValue').textContent = currentSpeed.toFixed(1) + 'x';
             
@@ -807,14 +798,6 @@
         
         document.getElementById('resetBtn').addEventListener('click', () => {
             initGame();
-        });
-        
-        const speedSlider = document.getElementById('speedSlider');
-        const speedValue = document.getElementById('speedValue');
-        
-        speedSlider.addEventListener('input', (e) => {
-            SPEED = parseFloat(e.target.value);
-            speedValue.textContent = SPEED;
         });
         
         initGame();
