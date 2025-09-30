@@ -194,7 +194,18 @@
         
         function generateNewRow() {
             const row = 0;
-            const numBoxes = Math.floor(Math.random() * (GRID_COLS + 1));
+            
+            // Weighted towards fewer boxes
+            // 30% chance of 0-2 boxes, 40% chance of 3-4 boxes, 30% chance of 5-6 boxes
+            const rand = Math.random();
+            let numBoxes;
+            if (rand < 0.3) {
+                numBoxes = Math.floor(Math.random() * 3); // 0, 1, or 2
+            } else if (rand < 0.7) {
+                numBoxes = Math.floor(Math.random() * 2) + 3; // 3 or 4
+            } else {
+                numBoxes = Math.floor(Math.random() * 2) + 5; // 5 or 6
+            }
             
             const availableColumns = [];
             for (let col = 0; col < GRID_COLS; col++) {
@@ -207,7 +218,8 @@
             const minHealth = 1;
             const maxHealth = currentLevel;
             
-            const addBallPickup = numBoxes > 0 && Math.random() < 0.2;
+            // Increased ball pickup frequency: 40% chance
+            const addBallPickup = numBoxes > 0 && Math.random() < 0.4;
             let ballPickupCol = null;
             
             if (addBallPickup) {
@@ -254,16 +266,22 @@
         }
         
         function dropBoxesAndAddRow() {
+            // First, move all boxes down
             for (let box of boxes) {
                 box.row++;
                 box.y += ROW_HEIGHT;
             }
             
-            const offScreenBoxes = boxes.filter(b => b.y > CANVAS_HEIGHT - 100);
+            // Check for game over - if the TOP of any box goes below the launch point
+            const offScreenBoxes = boxes.filter(b => b.health > 0 && b.y > LAUNCH_Y);
             if (offScreenBoxes.length > 0) {
-                // Game over
+                // Game Over - Reset everything
+                alert('Game Over! Reached Level ' + currentLevel);
+                initGame();
+                return;
             }
             
+            // Continue game - add new level
             currentLevel++;
             generateNewRow();
         }
@@ -274,8 +292,8 @@
                 this.active = delay === 0;
                 this.x = LAUNCH_X;
                 this.y = LAUNCH_Y;
-                this.vx = Math.cos(angle) * SPEED;
-                this.vy = Math.sin(angle) * SPEED;
+                this.vx = Math.cos(angle) * (SPEED + 15);
+                this.vy = Math.sin(angle) * (SPEED + 15);
                 this.dead = false;
                 this.renderX = this.x;
                 this.renderY = this.y;
