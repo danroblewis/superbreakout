@@ -70,6 +70,9 @@
             color: #e94560;
             font-weight: bold;
         }
+        .stat-value.normalizing {
+            color: #e9a545;
+        }
         .instructions {
             max-width: 800px;
             background: #16213e;
@@ -132,6 +135,10 @@
             <div class="stat-label">AUDIO INTENSITY</div>
             <div class="stat-value" id="audioIntensity">0</div>
         </div>
+        <div class="stat">
+            <div class="stat-label">ACTIVE SOUNDS</div>
+            <div class="stat-value" id="activeSounds">0</div>
+        </div>
         <div class="speed-indicator">
             <div class="speed-label">SPEED</div>
             <div class="speed-gauge">
@@ -180,6 +187,10 @@
                 this.wallHitCount = 0;
                 this.boxHitCount = 0;
                 this.enabled = true;
+                this.masterGainNode = null;
+                this.normalizationThreshold = 8; // Start normalizing when more than 8 sounds
+                this.baseVolume = 0.15;
+                this.maxVolume = 0.4;
                 
                 this.initAudio();
             }
@@ -187,10 +198,20 @@
             initAudio() {
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.createMasterGainNode();
                     this.createSoundPool();
                 } catch (e) {
                     console.log('Web Audio API not supported');
                 }
+            }
+            
+            createMasterGainNode() {
+                if (!this.audioContext) return;
+                
+                // Create a master gain node for overall volume control
+                this.masterGainNode = this.audioContext.createGain();
+                this.masterGainNode.connect(this.audioContext.destination);
+                this.masterGainNode.gain.setValueAtTime(0.7, this.audioContext.currentTime); // Overall volume reduction
             }
             
             createSoundPool() {
@@ -206,6 +227,21 @@
             
             getAvailableSound() {
                 return this.soundPool.find(sound => !sound.inUse);
+            }
+            
+            calculateNormalizedVolume() {
+                if (this.activeSounds <= this.normalizationThreshold) {
+                    return this.baseVolume;
+                }
+                
+                // Calculate volume reduction based on number of active sounds
+                const excessSounds = this.activeSounds - this.normalizationThreshold;
+                const maxExcess = this.maxConcurrentSounds - this.normalizationThreshold;
+                const reductionFactor = Math.min(excessSounds / maxExcess, 1);
+                
+                // Reduce volume as more sounds play simultaneously
+                const normalizedVolume = this.baseVolume * (1 - reductionFactor * 0.7);
+                return Math.max(normalizedVolume, 0.02); // Minimum volume to prevent silence
             }
             
             playWallHit() {
@@ -241,9 +277,13 @@
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
                 
-                // Connect audio graph
+                // Connect audio graph through master gain node
                 oscillator.connect(gainNode);
-                gainNode.connect(this.audioContext.destination);
+                if (this.masterGainNode) {
+                    gainNode.connect(this.masterGainNode);
+                } else {
+                    gainNode.connect(this.audioContext.destination);
+                }
                 
                 // Configure sound based on type and intensity
                 const baseFreq = type === 'wall' ? 200 : 150;
@@ -255,13 +295,14 @@
                 );
                 oscillator.type = 'sine';
                 
-                // Volume based on intensity
-                const volume = 0.1 + (intensityFactor * 0.3);
-                gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+                // Calculate normalized volume to prevent clipping
+                const baseVolume = this.calculateNormalizedVolume();
+                const intensityVolume = baseVolume + (intensityFactor * (this.maxVolume - baseVolume));
+                const finalVolume = Math.min(intensityVolume, this.maxVolume);
                 
                 // Envelope for natural sound
                 gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
+                gainNode.gain.linearRampToValueAtTime(finalVolume, this.audioContext.currentTime + 0.01);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
                 
                 // Play the sound
@@ -927,6 +968,15 @@
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
             document.getElementById('audioIntensity').textContent = Math.floor(audioSystem.intensity);
+            
+            // Update active sounds with normalization indicator
+            const activeSoundsElement = document.getElementById('activeSounds');
+            activeSoundsElement.textContent = audioSystem.activeSounds;
+            if (audioSystem.activeSounds > audioSystem.normalizationThreshold) {
+                activeSoundsElement.classList.add('normalizing');
+            } else {
+                activeSoundsElement.classList.remove('normalizing');
+            }
             
             // Update max speed reached
             if (currentSpeed > maxSpeedReached) {
