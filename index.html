@@ -178,8 +178,8 @@
                 this.enabled = true;
                 this.masterGainNode = null;
                 this.normalizationThreshold = 8; // Start normalizing when more than 8 sounds
-                this.baseVolume = 0.075; // Half of 0.15
-                this.maxVolume = 0.2; // Half of 0.4
+                this.baseVolume = 0.05; // Reduced from 0.15 to prevent clipping
+                this.maxVolume = 0.15; // Reduced from 0.4 to prevent clipping
                 
                 this.initAudio();
             }
@@ -200,7 +200,7 @@
                 // Create a master gain node for overall volume control
                 this.masterGainNode = this.audioContext.createGain();
                 this.masterGainNode.connect(this.audioContext.destination);
-                this.masterGainNode.gain.setValueAtTime(0.35, this.audioContext.currentTime); // Half of 0.7 for more headroom
+                this.masterGainNode.gain.setValueAtTime(0.7, this.audioContext.currentTime); // Overall volume reduction
             }
             
             createSoundPool() {
