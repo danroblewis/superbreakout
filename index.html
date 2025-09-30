@@ -108,6 +108,11 @@
             position: relative;
             z-index: 10;
         }
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -152,7 +157,10 @@
         </div>
         
         <button id="resetBtn">Reset Game</button>
-        <button id="audioToggle">🔊 Audio On</button>
+        <div class="audio-controls">
+            <button id="audioToggle">🔊</button>
+            <button id="musicToggle">🎵</button>
+        </div>
     </div>
 
     <div class="game-container">
@@ -177,9 +185,25 @@
                 this.boxHitCount = 0;
                 this.enabled = true;
                 this.masterGainNode = null;
+                this.sfxGainNode = null;
+                this.musicGainNode = null;
                 this.normalizationThreshold = 8; // Start normalizing when more than 8 sounds
                 this.baseVolume = 0.05; // Reduced from 0.15 to prevent clipping
                 this.maxVolume = 0.15; // Reduced from 0.4 to prevent clipping
+                
+                // Volume controls (0-100)
+                this.sfxVolume = 80;
+                this.musicVolume = 20;
+                this.musicEnabled = true;
+                
+                // Music system
+                this.musicOscillators = [];
+                this.musicPlaying = false;
+                this.melodyNotes = [];
+                this.currentNoteIndex = 0;
+                this.noteStartTime = 0;
+                this.noteDuration = 0;
+                this.melodyTimer = 0;
                 
                 this.initAudio();
             }
@@ -197,10 +221,19 @@
             createMasterGainNode() {
                 if (!this.audioContext) return;
                 
-                // Create a master gain node for overall volume control
+                // Create master gain node
                 this.masterGainNode = this.audioContext.createGain();
                 this.masterGainNode.connect(this.audioContext.destination);
-                this.masterGainNode.gain.setValueAtTime(0.7, this.audioContext.currentTime); // Overall volume reduction
+                this.masterGainNode.gain.setValueAtTime(0.7, this.audioContext.currentTime);
+                
+                // Create separate gain nodes for SFX and music
+                this.sfxGainNode = this.audioContext.createGain();
+                this.musicGainNode = this.audioContext.createGain();
+                
+                this.sfxGainNode.connect(this.masterGainNode);
+                this.musicGainNode.connect(this.masterGainNode);
+                
+                this.updateVolumeLevels();
             }
             
             createSoundPool() {
@@ -248,7 +281,7 @@
             toggle() {
                 this.enabled = !this.enabled;
                 const button = document.getElementById('audioToggle');
-                button.textContent = this.enabled ? '🔊 Audio On' : '🔇 Audio Off';
+                button.textContent = this.enabled ? '🔊' : '🔇';
             }
             
             playSimpleCollisionSound(type) {
@@ -269,9 +302,11 @@
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
                 
-                // Connect audio graph through master gain node
+                // Connect audio graph through SFX gain node
                 oscillator.connect(gainNode);
-                if (this.masterGainNode) {
+                if (this.sfxGainNode) {
+                    gainNode.connect(this.sfxGainNode);
+                } else if (this.masterGainNode) {
                     gainNode.connect(this.masterGainNode);
                 } else {
                     gainNode.connect(this.audioContext.destination);
@@ -383,7 +418,9 @@
                 compressor.connect(reverbGain);
                 reverbGain.connect(masterGain);
                 
-                if (this.masterGainNode) {
+                if (this.sfxGainNode) {
+                    masterGain.connect(this.sfxGainNode);
+                } else if (this.masterGainNode) {
                     masterGain.connect(this.masterGainNode);
                 } else {
                     masterGain.connect(this.audioContext.destination);
@@ -422,6 +459,158 @@
                 this.wallHitCount = 0;
                 this.boxHitCount = 0;
                 this.lastCollisionTime = now;
+            }
+            
+            updateVolumeLevels() {
+                if (!this.sfxGainNode || !this.musicGainNode) return;
+                
+                const now = this.audioContext.currentTime;
+                this.sfxGainNode.gain.setValueAtTime(this.sfxVolume / 100, now);
+                this.musicGainNode.gain.setValueAtTime(this.musicVolume / 100, now);
+            }
+            
+            setSfxVolume(volume) {
+                this.sfxVolume = Math.max(0, Math.min(100, volume));
+                this.updateVolumeLevels();
+            }
+            
+            setMusicVolume(volume) {
+                this.musicVolume = Math.max(0, Math.min(100, volume));
+                this.updateVolumeLevels();
+            }
+            
+            toggleMusic() {
+                this.musicEnabled = !this.musicEnabled;
+                const button = document.getElementById('musicToggle');
+                button.textContent = this.musicEnabled ? '🎵' : '🎶';
+                
+                if (this.musicEnabled) {
+                    this.startMusic();
+                } else {
+                    this.stopMusic();
+                }
+            }
+            
+            generateMelody() {
+                // Generate a simple melody based on game state
+                const scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]; // C major scale
+                const melody = [];
+                const numNotes = 8 + Math.floor(Math.random() * 4); // 8-12 notes
+                
+                for (let i = 0; i < numNotes; i++) {
+                    const noteIndex = Math.floor(Math.random() * scale.length);
+                    const octave = Math.random() < 0.3 ? 2 : 1; // Sometimes go up an octave
+                    const frequency = scale[noteIndex] * octave;
+                    const duration = 0.5 + Math.random() * 1.0; // 0.5-1.5 seconds
+                    
+                    melody.push({
+                        frequency: frequency,
+                        duration: duration,
+                        startTime: i === 0 ? 0 : melody[i-1].startTime + melody[i-1].duration
+                    });
+                }
+                
+                return melody;
+            }
+            
+            startMusic() {
+                if (!this.musicEnabled || this.musicPlaying || !this.audioContext) return;
+                
+                this.musicPlaying = true;
+                this.melodyNotes = this.generateMelody();
+                this.currentNoteIndex = 0;
+                this.noteStartTime = this.audioContext.currentTime;
+                this.melodyTimer = 0;
+            }
+            
+            stopMusic() {
+                this.musicPlaying = false;
+                this.musicOscillators.forEach(osc => {
+                    try {
+                        osc.stop();
+                    } catch (e) {
+                        // Oscillator might already be stopped
+                    }
+                });
+                this.musicOscillators = [];
+            }
+            
+            updateMusic() {
+                if (!this.musicPlaying || !this.musicEnabled || !this.audioContext) return;
+                
+                const now = this.audioContext.currentTime;
+                const elapsed = now - this.noteStartTime;
+                
+                // Check if we need to start a new note
+                if (this.currentNoteIndex < this.melodyNotes.length) {
+                    const currentNote = this.melodyNotes[this.currentNoteIndex];
+                    const noteStartTime = currentNote.startTime;
+                    
+                    if (elapsed >= noteStartTime && this.musicOscillators.length === 0) {
+                        this.playMelodyNote(currentNote);
+                    }
+                }
+                
+                // Check if current note should end
+                if (this.musicOscillators.length > 0) {
+                    const currentNote = this.melodyNotes[this.currentNoteIndex];
+                    const noteEndTime = currentNote.startTime + currentNote.duration;
+                    
+                    if (elapsed >= noteEndTime) {
+                        this.stopCurrentNote();
+                        this.currentNoteIndex++;
+                        
+                        // If we've played all notes, generate a new melody
+                        if (this.currentNoteIndex >= this.melodyNotes.length) {
+                            this.melodyNotes = this.generateMelody();
+                            this.currentNoteIndex = 0;
+                            this.noteStartTime = now;
+                        }
+                    }
+                }
+            }
+            
+            playMelodyNote(note) {
+                if (!this.audioContext) return;
+                
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.musicGainNode);
+                
+                oscillator.frequency.setValueAtTime(note.frequency, this.audioContext.currentTime);
+                oscillator.type = 'sine';
+                
+                // Gentle envelope
+                const volume = 0.1 * (this.musicVolume / 100);
+                gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(volume * 0.3, this.audioContext.currentTime + note.duration - 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + note.duration);
+                
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + note.duration);
+                
+                this.musicOscillators.push(oscillator);
+                
+                oscillator.onended = () => {
+                    const index = this.musicOscillators.indexOf(oscillator);
+                    if (index > -1) {
+                        this.musicOscillators.splice(index, 1);
+                    }
+                };
+            }
+            
+            stopCurrentNote() {
+                this.musicOscillators.forEach(osc => {
+                    try {
+                        osc.stop();
+                    } catch (e) {
+                        // Oscillator might already be stopped
+                    }
+                });
+                this.musicOscillators = [];
             }
             
             playBackgroundAmbience() {
@@ -540,6 +729,11 @@
             }
             
             updateStats();
+            
+            // Start music if enabled
+            if (audioSystem.musicEnabled) {
+                audioSystem.startMusic();
+            }
         }
         
         function generateNewRow() {
@@ -1041,6 +1235,7 @@
             
             updateStats();
             audioSystem.updateIntensity();
+            audioSystem.updateMusic();
             requestAnimationFrame(gameLoop);
         }
         
@@ -1105,6 +1300,10 @@
         
         document.getElementById('audioToggle').addEventListener('click', () => {
             audioSystem.toggle();
+        });
+        
+        document.getElementById('musicToggle').addEventListener('click', () => {
+            audioSystem.toggleMusic();
         });
         
         // Start audio context on first user interaction
