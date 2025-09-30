@@ -137,8 +137,8 @@
         const CANVAS_WIDTH = GRID_OFFSET_X * 2 + GRID_COLS * (BOX_SIZE + BOX_MARGIN);
         const CANVAS_HEIGHT = 600;
         
-        const LAUNCH_X = CANVAS_WIDTH / 2;
-        const LAUNCH_Y = CANVAS_HEIGHT - 30;
+        let LAUNCH_X = CANVAS_WIDTH / 2;
+        let LAUNCH_Y = CANVAS_HEIGHT - 30;
         const BALL_RADIUS = 6;
         
         const ANGLE = -Math.PI / 4;
@@ -170,6 +170,11 @@
             lastLaunchTime = 0;
             currentLevel = 1;
             hadActiveBalls = false;
+            lastBallX = null;
+            
+            // Reset launch position
+            LAUNCH_X = CANVAS_WIDTH / 2;
+            LAUNCH_Y = CANVAS_HEIGHT - 30;
             
             // Start with 3 rows
             generateNewRow();
@@ -388,6 +393,8 @@
                     // Handle collision
                     if (next.collision.type === 'wall') {
                         if (next.collision.side === 'bottom') {
+                            // Track position where ball fell off
+                            lastBallX = this.x;
                             this.dead = true;
                             return;
                         } else if (next.collision.side === 'left' || next.collision.side === 'right') {
@@ -435,6 +442,8 @@
                     this.renderY = BALL_RADIUS;
                     this.vy = Math.abs(this.vy);
                 } else if (this.renderY > CANVAS_HEIGHT) {
+                    // Track position where ball fell off
+                    lastBallX = this.renderX;
                     this.dead = true;
                     return;
                 }
@@ -541,6 +550,13 @@
             
             // Detect when all balls have left the field
             if (hadActiveBalls && activeBalls === 0) {
+                // Update launch position to where the last ball fell
+                if (lastBallX !== null) {
+                    LAUNCH_X = lastBallX;
+                    // Keep Y at the bottom
+                    LAUNCH_Y = CANVAS_HEIGHT - 30;
+                }
+                
                 dropBoxesAndAddRow();
                 balls = []; // Clear dead balls
                 hadActiveBalls = false;
