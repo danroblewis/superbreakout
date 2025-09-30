@@ -938,6 +938,8 @@
                 this.renderY = this.y;
                 this.nextCollision = null;
                 this.distanceToCollision = 0;
+                this.lastCollisionPos = { x: this.x, y: this.y };
+                this.trajectoryLines = [];
             }
             
             calculateNextCollision() {
@@ -1055,8 +1057,23 @@
                         continue;
                     }
                     
+                    // Store previous position before collision
+                    const prevX = this.x;
+                    const prevY = this.y;
+                    
                     this.x += this.vx * next.time;
                     this.y += this.vy * next.time;
+                    
+                    // Add trajectory line from previous collision to this collision
+                    this.trajectoryLines.push({
+                        startX: this.lastCollisionPos.x,
+                        startY: this.lastCollisionPos.y,
+                        endX: this.x,
+                        endY: this.y
+                    });
+                    
+                    // Update last collision position
+                    this.lastCollisionPos = { x: this.x, y: this.y };
                     
                     if (next.collision.type === 'wall') {
                         if (next.collision.side === 'bottom') {
@@ -1187,11 +1204,28 @@
             drawTransparent() {
                 if (!this.active || this.dead) return;
                 
+                // Limit trajectory lines to last 20 segments to prevent accumulation
+                const maxLines = 10;
+                if (this.trajectoryLines.length > maxLines) {
+                    this.trajectoryLines = this.trajectoryLines.slice(-maxLines);
+                }
+                
+                // Draw trajectory lines
+                ctx.strokeStyle = 'rgba(78, 204, 163, 0.15)';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                for (let line of this.trajectoryLines) {
+                    ctx.moveTo(line.startX, line.startY);
+                    ctx.lineTo(line.endX, line.endY);
+                }
+                ctx.stroke();
+                
+                // Draw ball
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, BALL_RADIUS, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(78, 204, 163, 0.5)'; // Very transparent green
+                ctx.fillStyle = 'rgba(78, 204, 163, 0.5)';
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(69, 179, 147, 0.5)'; // Very transparent border
+                ctx.strokeStyle = 'rgba(69, 179, 147, 0.5)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
             }
