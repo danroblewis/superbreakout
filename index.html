@@ -709,6 +709,9 @@
         const SPEED_ACCELERATION_RATE = 2; // How fast the game speeds up (higher = faster acceleration)
         const SPEED_ACCELERATION_BASE = 1.2; // Base for exponential speed growth
         
+        // Box health calculation mode: 'level' or 'ballcount'
+        const BOX_HEALTH_MODE = 'level';
+        
         // Aiming state
         let isAiming = true;
         let aimAngle = -Math.PI / 2;
@@ -805,8 +808,17 @@
             }
             
             // Create the boxes
-            const minHealth = Math.max(1, currentLevel - 2); // Within 2 of max
-            const maxHealth = currentLevel;
+            let minHealth, maxHealth;
+            
+            if (BOX_HEALTH_MODE === 'ballcount') {
+                // Ball count based health
+                minHealth = Math.max(1, ballCount); // At least as many hits as balls
+                maxHealth = ballCount + 1; // Ball count plus 1
+            } else {
+                // Level based health (original system)
+                minHealth = Math.max(1, currentLevel - 2); // Within 2 of max
+                maxHealth = currentLevel;
+            }
             
             for (let col of selectedColumns) {
                 const health = Math.floor(Math.random() * (maxHealth - minHealth + 1)) + minHealth;
@@ -1232,7 +1244,7 @@
             
             currentSpeed = calculateSpeed();
             
-            const ANALYTICAL_THRESHOLD = 50;
+            const ANALYTICAL_THRESHOLD = 10;
             
             if (currentSpeed < ANALYTICAL_THRESHOLD) {
                 const stepsThisFrame = Math.max(1, Math.ceil(currentSpeed));
@@ -1244,6 +1256,12 @@
                     }
                 }
             } else {
+                // Sync analytical positions with rendered positions before switching to analytical mode
+                for (let ball of balls) {
+                    ball.x = ball.renderX;
+                    ball.y = ball.renderY;
+                }
+                
                 collisionsThisFrame = Math.max(1, Math.floor(currentSpeed / 10));
                 for (let ball of balls) {
                     ball.update(collisionsThisFrame);
