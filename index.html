@@ -70,9 +70,6 @@
             color: #e94560;
             font-weight: bold;
         }
-        .stat-value.normalizing {
-            color: #e9a545;
-        }
         .instructions {
             max-width: 800px;
             background: #16213e;
@@ -130,14 +127,6 @@
         <div class="stat">
             <div class="stat-label">MAX SPEED</div>
             <div class="stat-value" id="maxSpeed">20</div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">AUDIO INTENSITY</div>
-            <div class="stat-value" id="audioIntensity">0</div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">ACTIVE SOUNDS</div>
-            <div class="stat-value" id="activeSounds">0</div>
         </div>
         <div class="speed-indicator">
             <div class="speed-label">SPEED</div>
@@ -427,7 +416,7 @@
                 this.intensity += recentCollisions * 2;
                 
                 // Cap intensity
-                this.intensity = Math.min(this.intensity, 200);
+                this.intensity = Math.min(this.intensity, 100);
                 
                 // Reset counters
                 this.wallHitCount = 0;
@@ -1063,16 +1052,6 @@
             document.getElementById('boxCount').textContent = remainingBoxes;
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
-            document.getElementById('audioIntensity').textContent = Math.floor(audioSystem.intensity);
-            
-            // Update active sounds with normalization indicator
-            const activeSoundsElement = document.getElementById('activeSounds');
-            activeSoundsElement.textContent = audioSystem.activeSounds;
-            if (audioSystem.activeSounds > audioSystem.normalizationThreshold) {
-                activeSoundsElement.classList.add('normalizing');
-            } else {
-                activeSoundsElement.classList.remove('normalizing');
-            }
             
             // Update max speed reached
             if (currentSpeed > maxSpeedReached) {
