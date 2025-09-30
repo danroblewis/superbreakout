@@ -88,7 +88,7 @@
 
     <canvas id="gameCanvas" width="490" height="600"></canvas>
 
-    <div class="speed-indicator" id="speedIndicator">Speed: 1x | <span id="aimStatus">Click to aim and launch</span></div>
+    <div class="speed-indicator" id="speedIndicator">Speed: 1x</div>
 
     <div class="controls">
         <button id="resetBtn">Reset Game</button>
@@ -125,7 +125,7 @@
         
         // Game constants
         const GRID_COLS = 6;
-        const GRID_ROWS = 3; // Start with 3 rows
+        const GRID_ROWS = 3;
         const BOX_SIZE = 60;
         const BOX_MARGIN = 5;
         const GRID_OFFSET_X = 50;
@@ -137,14 +137,15 @@
         
         let LAUNCH_X = CANVAS_WIDTH / 2;
         let LAUNCH_Y = CANVAS_HEIGHT - 30;
+        
         const BALL_RADIUS = 6;
         
         const ANGLE = -Math.PI / 4;
-        let SPEED = 3; // Now variable, controlled by slider
+        let SPEED = 3;
         
         // Aiming state
-        let isAiming = true; // Always show aiming line
-        let aimAngle = -Math.PI / 2; // Start aiming straight up
+        let isAiming = true;
+        let aimAngle = -Math.PI / 2;
         
         // Game state
         let boxes = [];
@@ -153,8 +154,15 @@
         let currentSpeed = 1;
         let collisionsThisFrame = 0;
         let speedAccumulator = 1;
-        let timeInPlay = 0; // Time since last ball was launched
+        let timeInPlay = 0;
         let lastLaunchTime = 0;
+        let currentLevel = 1;
+        let hadActiveBalls = false;
+        let lastBallX = null;
+        let ballCount = 1;
+        let ballsToLaunch = 0;
+        let launchTimer = 0;
+        let controlsDisabled = false;
         
         function initGame() {
             boxes = [];
@@ -172,11 +180,9 @@
             launchTimer = 0;
             controlsDisabled = false;
             
-            // Reset launch position
             LAUNCH_X = CANVAS_WIDTH / 2;
             LAUNCH_Y = CANVAS_HEIGHT - 30;
             
-            // Start with 3 rows
             generateNewRow();
             generateNewRow();
             generateNewRow();
@@ -185,31 +191,24 @@
         }
         
         function generateNewRow() {
-            const row = 0; // Always add to the top
-            
-            // Randomly choose how many boxes to place (0 to GRID_COLS)
+            const row = 0;
             const numBoxes = Math.floor(Math.random() * (GRID_COLS + 1));
             
-            // Create array of all possible column positions
             const availableColumns = [];
             for (let col = 0; col < GRID_COLS; col++) {
                 availableColumns.push(col);
             }
             
-            // Shuffle and pick random positions
             const shuffled = availableColumns.sort(() => Math.random() - 0.5);
             const selectedColumns = shuffled.slice(0, numBoxes);
             
-            // Calculate health range based on level
             const minHealth = 1;
             const maxHealth = currentLevel;
             
-            // Randomly decide to add a ball pickup (20% chance if there are boxes)
             const addBallPickup = numBoxes > 0 && Math.random() < 0.2;
             let ballPickupCol = null;
             
             if (addBallPickup) {
-                // Pick a random column that doesn't have a box
                 const emptyColumns = [];
                 for (let col = 0; col < GRID_COLS; col++) {
                     if (!selectedColumns.includes(col)) {
@@ -237,7 +236,6 @@
                 });
             }
             
-            // Add ball pickup if we decided to
             if (ballPickupCol !== null) {
                 boxes.push({
                     col: ballPickupCol,
@@ -254,26 +252,20 @@
         }
         
         function dropBoxesAndAddRow() {
-            // Move all existing boxes down one row
             for (let box of boxes) {
                 box.row++;
                 box.y += ROW_HEIGHT;
             }
             
-            // Check if any boxes have moved off screen (game over condition)
             const offScreenBoxes = boxes.filter(b => b.y > CANVAS_HEIGHT - 100);
             if (offScreenBoxes.length > 0) {
-                // Could add game over logic here
+                // Game over
             }
             
-            // Increment level
             currentLevel++;
-            
-            // Add new row at the top
             generateNewRow();
         }
         
-        // Analytical collision detection
         class Ball {
             constructor(angle, delay = 0) {
                 this.delay = delay;
@@ -283,21 +275,16 @@
                 this.vx = Math.cos(angle) * SPEED;
                 this.vy = Math.sin(angle) * SPEED;
                 this.dead = false;
-                
-                // For smooth rendering
                 this.renderX = this.x;
                 this.renderY = this.y;
                 this.nextCollision = null;
                 this.distanceToCollision = 0;
-                console.log('Ball created:', { angle, delay, vx: this.vx, vy: this.vy, active: this.active });
             }
             
-            // Calculate time until next collision
             calculateNextCollision() {
                 let minTime = Infinity;
                 let collision = null;
                 
-                // Check wall collisions
                 if (this.vx > 0) {
                     const t = (CANVAS_WIDTH - BALL_RADIUS - this.x) / this.vx;
                     if (t > 0 && t < minTime) {
@@ -326,7 +313,6 @@
                     }
                 }
                 
-                // Check box collisions
                 for (let box of boxes) {
                     if (box.health <= 0) continue;
                     
@@ -340,19 +326,16 @@
                 return { time: minTime, collision: collision };
             }
             
-            // Ray-AABB intersection
             rayBoxIntersection(box) {
                 let minT = -Infinity;
                 let maxT = Infinity;
                 let hitSide = null;
                 
-                // Expand box by ball radius
                 const x1 = box.x - BALL_RADIUS;
                 const x2 = box.x + box.width + BALL_RADIUS;
                 const y1 = box.y - BALL_RADIUS;
                 const y2 = box.y + box.height + BALL_RADIUS;
                 
-                // Check X axis
                 if (this.vx !== 0) {
                     const t1 = (x1 - this.x) / this.vx;
                     const t2 = (x2 - this.x) / this.vx;
@@ -368,7 +351,6 @@
                     if (this.x < x1 || this.x > x2) return null;
                 }
                 
-                // Check Y axis
                 if (this.vy !== 0) {
                     const t1 = (y1 - this.y) / this.vy;
                     const t2 = (y2 - this.y) / this.vy;
@@ -401,14 +383,12 @@
                 
                 if (!this.active || this.dead) return;
                 
-                // Process multiple collisions
                 for (let i = 0; i < numCollisions; i++) {
                     if (this.dead) break;
                     
                     const next = this.calculateNextCollision();
                     
                     if (!next.collision || next.time === Infinity) {
-                        // No collision, move forward a bit
                         this.x += this.vx * 10;
                         this.y += this.vy * 10;
                         this.renderX = this.x;
@@ -416,14 +396,11 @@
                         continue;
                     }
                     
-                    // Move to collision point
                     this.x += this.vx * next.time;
                     this.y += this.vy * next.time;
                     
-                    // Handle collision
                     if (next.collision.type === 'wall') {
                         if (next.collision.side === 'bottom') {
-                            // Track position where ball fell off
                             lastBallX = this.x;
                             this.dead = true;
                             return;
@@ -436,15 +413,12 @@
                         const box = next.collision.box;
                         
                         if (box.isBallPickup) {
-                            // Collect the ball pickup - don't bounce
                             box.health = 0;
                             ballCount++;
                         } else {
-                            // Regular box - bounce and decrement health
                             box.health--;
                             totalCollisions++;
                             
-                            // Bounce off box
                             if (next.collision.side === 'left' || next.collision.side === 'right') {
                                 this.vx = -this.vx;
                             } else {
@@ -454,20 +428,16 @@
                     }
                 }
                 
-                // Update render position to actual position after collisions
                 this.renderX = this.x;
                 this.renderY = this.y;
             }
             
-            // New method: update render position for smooth animation
             updateRenderPosition(speed) {
                 if (!this.active || this.dead) return;
                 
-                // Move ball frame by frame
                 this.renderX += this.vx;
                 this.renderY += this.vy;
                 
-                // Apply wall bounces to render position
                 if (this.renderX - BALL_RADIUS < 0) {
                     this.renderX = BALL_RADIUS;
                     this.vx = Math.abs(this.vx);
@@ -480,13 +450,11 @@
                     this.renderY = BALL_RADIUS;
                     this.vy = Math.abs(this.vy);
                 } else if (this.renderY > CANVAS_HEIGHT) {
-                    // Track position where ball fell off
                     lastBallX = this.renderX;
                     this.dead = true;
                     return;
                 }
                 
-                // Check box collisions at render position
                 for (let box of boxes) {
                     if (box.health <= 0) continue;
                     
@@ -496,7 +464,6 @@
                         this.renderY - BALL_RADIUS < box.y + box.height) {
                         
                         if (box.isBallPickup) {
-                            // Collect the ball pickup
                             box.health = 0;
                             ballCount++;
                             return;
@@ -529,7 +496,6 @@
                             }
                         }
                         
-                        // Sync actual position with render position
                         this.x = this.renderX;
                         this.y = this.renderY;
                         
@@ -555,16 +521,32 @@
             for (let box of boxes) {
                 if (box.health <= 0) continue;
                 
-                const healthPercent = box.health / box.maxHealth;
-                const hue = healthPercent * 120;
-                ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
-                ctx.fillRect(box.x, box.y, box.width, box.height);
-                
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 20px Courier New';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(box.health, box.x + box.width/2, box.y + box.height/2);
+                if (box.isBallPickup) {
+                    ctx.beginPath();
+                    ctx.arc(box.x + box.width/2, box.y + box.height/2, box.width/2 - 5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fill();
+                    ctx.strokeStyle = '#4ecca3';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#0f3460';
+                    ctx.font = 'bold 18px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('+1', box.x + box.width/2, box.y + box.height/2);
+                } else {
+                    const healthPercent = box.health / box.maxHealth;
+                    const hue = healthPercent * 120;
+                    ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                    ctx.fillRect(box.x, box.y, box.width, box.height);
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 20px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(box.health, box.x + box.width/2, box.y + box.height/2);
+                }
             }
         }
         
@@ -572,42 +554,45 @@
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
             
             if (activeBalls === 0) {
-                // No balls active - reset timer for next throw
                 timeInPlay = 0;
                 return 1;
             }
             
-            // Speed increases based on time balls have been in play since last launch
-            // Exponential growth for faster acceleration
-            const secondsInPlay = timeInPlay / 60; // Assuming 60 FPS
-            const speed = Math.pow(1.5, secondsInPlay * 3); // 1.5^(3t) - very fast growth
+            const secondsInPlay = timeInPlay / 60;
+            const speed = Math.pow(1.5, secondsInPlay * 3);
             
-            // Cap maximum speed
             return Math.min(speed, 2000);
         }
         
         function gameLoop() {
             ctx.fillStyle = '#0f3460';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             
-            // Check for active balls
+            // Handle sequential ball launching
+            if (ballsToLaunch > 0) {
+                launchTimer++;
+                if (launchTimer >= 5) {
+                    const newBall = new Ball(aimAngle, 0);
+                    balls.push(newBall);
+                    ballsToLaunch--;
+                    launchTimer = 0;
+                }
+            }
+            
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
             
-            // Detect when all balls have left the field
-            if (hadActiveBalls && activeBalls === 0) {
-                // Update launch position to where the last ball fell
+            if (hadActiveBalls && activeBalls === 0 && ballsToLaunch === 0) {
                 if (lastBallX !== null) {
                     LAUNCH_X = lastBallX;
-                    // Keep Y at the bottom
                     LAUNCH_Y = CANVAS_HEIGHT - 30;
                 }
                 
                 dropBoxesAndAddRow();
-                balls = []; // Clear dead balls
+                balls = [];
                 hadActiveBalls = false;
+                controlsDisabled = false;
             }
             
-            // Track if we have active balls this frame
             if (activeBalls > 0) {
                 timeInPlay++;
                 hadActiveBalls = true;
@@ -615,12 +600,9 @@
             
             currentSpeed = calculateSpeed();
             
-            // Threshold for switching to analytical mode
-            const ANALYTICAL_THRESHOLD = 50; // Switch at 50x speed
+            const ANALYTICAL_THRESHOLD = 50;
             
             if (currentSpeed < ANALYTICAL_THRESHOLD) {
-                // Low-medium speed: run frame-by-frame simulation multiple times per frame
-                // This makes the simulation run faster without switching modes
                 const stepsThisFrame = Math.floor(currentSpeed);
                 collisionsThisFrame = 0;
                 
@@ -630,7 +612,6 @@
                     }
                 }
             } else {
-                // High speed: analytical collision jumping
                 collisionsThisFrame = Math.max(1, Math.floor(currentSpeed / 10));
                 for (let ball of balls) {
                     ball.update(collisionsThisFrame);
@@ -644,15 +625,12 @@
                 ball.draw();
             }
             
-            // Draw launch point
             ctx.beginPath();
             ctx.arc(LAUNCH_X, LAUNCH_Y, 10, 0, Math.PI * 2);
             ctx.fillStyle = '#e94560';
             ctx.fill();
             
-            // Draw aiming line
             if (isAiming && !controlsDisabled) {
-                // Use aimAngle for the arrow direction
                 const arrowLength = 100;
                 const endX = LAUNCH_X + Math.cos(aimAngle) * arrowLength;
                 const endY = LAUNCH_Y + Math.sin(aimAngle) * arrowLength;
@@ -664,7 +642,6 @@
                 ctx.lineTo(endX, endY);
                 ctx.stroke();
                 
-                // Arrow head
                 const headlen = 10;
                 ctx.beginPath();
                 ctx.moveTo(endX, endY);
@@ -681,7 +658,6 @@
             }
             
             updateStats();
-            console.log('Calling requestAnimationFrame');
             requestAnimationFrame(gameLoop);
         }
         
@@ -699,20 +675,17 @@
             if (controlsDisabled) {
                 statusText = 'Launching...';
             } else if (isAiming) {
-                statusText = 'Click to launch!';
+                statusText = 'Press Space to launch!';
             } else {
-                statusText = 'Click to aim and launch';
+                statusText = 'Press Space to launch';
             }
             document.getElementById('speedIndicator').textContent = speedText + statusText;
         }
         
-        // Keyboard controls for aiming
         document.addEventListener('keydown', (e) => {
-            console.log('Key pressed:', e.key, 'controlsDisabled:', controlsDisabled);
-            
             if (controlsDisabled) return;
             
-            const angleStep = Math.PI / 36; // 5 degree increments
+            const angleStep = Math.PI / 36;
             
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
                 aimAngle -= angleStep;
@@ -721,7 +694,6 @@
                 aimAngle += angleStep;
                 e.preventDefault();
             } else if (e.key === ' ' || e.key === 'Enter') {
-                console.log('Space/Enter pressed! Setting ballsToLaunch to:', ballCount);
                 ballsToLaunch = ballCount;
                 launchTimer = 0;
                 controlsDisabled = true;
@@ -730,7 +702,6 @@
                 e.preventDefault();
             }
             
-            // Clamp angle to prevent horizontal shots
             const minAngle = -Math.PI + 0.01;
             const maxAngle = -0.01;
             
@@ -746,7 +717,6 @@
         });
         
         document.getElementById('add5Btn').addEventListener('click', () => {
-            console.log('Add 5 button clicked');
             for (let i = 0; i < 5; i++) {
                 const randomAngle = -Math.PI/2 + (Math.random() - 0.5) * Math.PI * 0.8;
                 balls.push(new Ball(randomAngle, i * 3));
@@ -754,7 +724,6 @@
             timeInPlay = 0;
         });
         
-        // Speed slider control
         const speedSlider = document.getElementById('speedSlider');
         const speedValue = document.getElementById('speedValue');
         
