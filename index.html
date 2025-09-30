@@ -1183,6 +1183,18 @@
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }
+            
+            drawTransparent() {
+                if (!this.active || this.dead) return;
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, BALL_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(78, 204, 163, 0.5)'; // Very transparent green
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(69, 179, 147, 0.5)'; // Very transparent border
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
         }
         
         function drawBoxes() {
@@ -1317,8 +1329,16 @@
             balls = balls.filter(b => !b.dead);
             
             drawBoxes();
+            
+            // Render balls with different opacity based on mode
             for (let ball of balls) {
-                ball.draw();
+                if (currentSpeed < ANALYTICAL_THRESHOLD) {
+                    // Full opacity in iterative mode
+                    ball.draw();
+                } else {
+                    // Very transparent in analytical mode
+                    ball.drawTransparent();
+                }
             }
             
             ctx.beginPath();
