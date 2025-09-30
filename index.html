@@ -90,6 +90,9 @@
             position: relative;
             overflow: hidden;
         }
+        .speed-indicator {
+            position: relative;
+        }
         .speed-gauge svg {
             transform: rotate(0deg);
         }
@@ -104,14 +107,49 @@
             color: #4ecca3;
             font-weight: bold;
             text-align: center;
-            margin-top: 5px;
-            position: relative;
+            position: absolute;
+            top: 75%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             z-index: 10;
         }
         .audio-controls {
             display: flex;
             gap: 10px;
             margin: 10px 0;
+        }
+        .angle-indicator {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .angle-label {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .angle-gauge {
+            width: 150px;
+            height: 85px;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+        }
+        .angle-gauge svg {
+            transform: rotate(0deg);
+        }
+        .angle-value {
+            font-size: 18px;
+            color: #e8f4f8;
+            font-weight: bold;
+            text-align: center;
+            position: absolute;
+            top: 75%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
         }
         .autoshoot-button {
             position: absolute;
@@ -151,20 +189,28 @@
 <body>
     <div class="info">
         <div class="stat">
-            <div class="stat-label">BALLS</div>
-            <div class="stat-value" id="ballCount">1</div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">BOXES REMAINING</div>
-            <div class="stat-value" id="boxCount">0</div>
-        </div>
-        <div class="stat">
             <div class="stat-label">LEVEL</div>
             <div class="stat-value" id="levelCount">1</div>
         </div>
         <div class="stat">
+            <div class="stat-label">BALLS</div>
+            <div class="stat-value" id="ballCount">1</div>
+        </div>
+        <div class="stat">
             <div class="stat-label">MAX SPEED</div>
             <div class="stat-value" id="maxSpeed">20</div>
+        </div>
+        <div class="angle-indicator">
+            <div class="angle-label">ANGLE</div>
+            <div class="angle-gauge">
+                <svg width="150" height="85" viewBox="0 0 150 85">
+                    <!-- Background circle -->
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#0f3460" stroke-width="3" stroke-linecap="round"/>
+                    <!-- Angle indicator dot -->
+                    <circle id="angleDot" cx="75" cy="15" r="8" fill="#e8f4f8" stroke="#16213e" stroke-width="2"/>
+                </svg>
+            </div>
+            <div class="angle-value" id="angleValue">-90°</div>
         </div>
         <div class="speed-indicator">
             <div class="speed-label">SPEED</div>
@@ -1212,7 +1258,7 @@
             // Handle autoshoot
             if (autoshootEnabled && !controlsDisabled && ballsToLaunch === 0) {
                 autoshootTimer++;
-                if (autoshootTimer >= 60) { // 1000ms at 60fps
+                if (autoshootTimer >= 60/10) { // 100ms at 60fps
                     // Trigger shoot action
                     ballsToLaunch = ballCount;
                     launchTimer = 0;
@@ -1315,10 +1361,8 @@
         
         function updateStats() {
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
-            const remainingBoxes = boxes.filter(b => b.health > 0 && !b.isBallPickup).length;
             
             document.getElementById('ballCount').textContent = ballCount;
-            document.getElementById('boxCount').textContent = remainingBoxes;
             document.getElementById('levelCount').textContent = currentLevel;
             document.getElementById('maxSpeed').textContent = Math.floor(maxSpeedReached) + 'x';
             
@@ -1338,16 +1382,41 @@
             const speedColor = speedPercent < 0.3 ? '#4ecca3' : 
                                speedPercent < 0.7 ? '#e9a545' : '#e94560';
             document.getElementById('speedValue').style.color = speedColor;
+            
+            // Update angle display (add 180 degrees to show 0-180 range)
+            const angleDegrees = ((aimAngle * 180 / Math.PI) + 180).toFixed(1);
+            document.getElementById('angleValue').textContent = angleDegrees + '°';
+            
+            // Update angle dot position
+            const dotAngle = aimAngle; // Use aimAngle directly (already in correct coordinate system)
+            const centerX = 75;
+            const centerY = 75;
+            const radius = 60;
+            const dotX = centerX + Math.cos(dotAngle) * radius;
+            const dotY = centerY + Math.sin(dotAngle) * radius;
+            
+            const angleDot = document.getElementById('angleDot');
+            angleDot.setAttribute('cx', dotX);
+            angleDot.setAttribute('cy', dotY);
+            
+            // Use consistent off-white blue color for angle display
+            const angleColor = '#e8f4f8';
+            document.getElementById('angleValue').style.color = angleColor;
+            angleDot.setAttribute('fill', angleColor);
         }
         
         document.addEventListener('keydown', (e) => {
             if (controlsDisabled) return;
             
+            // Check if shift key is held for fine movement
+            const fineMovement = e.shiftKey;
+            const angleStep = fineMovement ? ANGLE_STEP / 10 : ANGLE_STEP;
+            
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                aimAngle -= ANGLE_STEP;
+                aimAngle -= angleStep;
                 e.preventDefault();
             } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                aimAngle += ANGLE_STEP;
+                aimAngle += angleStep;
                 e.preventDefault();
             } else if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
                 ballsToLaunch = ballCount;
