@@ -766,7 +766,13 @@
         const ANGLE_STEP = Math.PI / 72; // Aiming precision (smaller = finer control)
         const BASE_SPEED_OFFSET = 15; // Added to slider speed value
         const SPEED_ACCELERATION_RATE = 2; // How fast the game speeds up (higher = faster acceleration)
-        const SPEED_ACCELERATION_BASE = 1.5; // Base for exponential speed growth
+        const SPEED_ACCELERATION_BASE = 1.2; // Base for exponential speed growth
+
+        const INITIAL_ANALYTICAL_THRESHOLD = 20;
+        
+        // Angle limits in degrees
+        const MIN_ANGLE_DEGREES = 2;
+        const MAX_ANGLE_DEGREES = 178;
         
         // Box health calculation mode: 'level' or 'ballcount'
         const BOX_HEALTH_MODE = 'level';
@@ -795,6 +801,8 @@
         let maxSpeedReached = 20; // Track highest speed reached
         let autoshootEnabled = false;
         let autoshootTimer = 0;
+        let fieldClearedLastShot = false;
+        let analyticalThreshold = INITIAL_ANALYTICAL_THRESHOLD;
         
         function initGame() {
             boxes = [];
@@ -840,12 +848,12 @@
         function generateNewRow() {
             const row = 0;
             
-            // Decide how many boxes (0-6)
+            // Decide how many boxes (1-6, ensuring at least 1)
             // Weighted towards fewer boxes
             const rand = Math.random();
             let numBoxes;
             if (rand < 0.3) {
-                numBoxes = Math.floor(Math.random() * 3); // 0, 1, or 2
+                numBoxes = Math.floor(Math.random() * 2) + 1; // 1 or 2
             } else if (rand < 0.7) {
                 numBoxes = Math.floor(Math.random() * 2) + 3; // 3 or 4
             } else {
@@ -857,9 +865,9 @@
             const shuffled = allColumns.sort(() => Math.random() - 0.5);
             const selectedColumns = shuffled.slice(0, numBoxes);
             
-            // Decide if we want a ball pickup (60% chance if space available)
+            // Decide if we want a ball pickup (60% chance if space available and field wasn't cleared last shot)
             const remainingColumns = shuffled.slice(numBoxes);
-            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.6;
+            const addBallPickup = remainingColumns.length > 0 && Math.random() < 0.6 && !fieldClearedLastShot;
             let ballPickupCol = null;
             
             if (addBallPickup) {
@@ -1225,7 +1233,7 @@
                 
                 // Draw trajectory lines
                 ctx.strokeStyle = 'rgba(78, 204, 163, 0.02)';
-                ctx.lineWidth = 5;
+                ctx.lineWidth = 20;
                 ctx.beginPath();
                 for (let line of this.trajectoryLines) {
                     ctx.moveTo(line.startX, line.startY);
@@ -1299,6 +1307,11 @@
             return Math.min(speed, 2000);
         }
         
+        function calculateAnalyticalThreshold() {
+            // Reduce threshold by number of balls, minimum of 0
+            return Math.max(0, INITIAL_ANALYTICAL_THRESHOLD - ballCount);
+        }
+        
         function gameLoop() {
             ctx.fillStyle = '#0f3460';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1331,6 +1344,10 @@
             const activeBalls = balls.filter(b => b.active && !b.dead).length;
             
             if (hadActiveBalls && activeBalls === 0 && ballsToLaunch === 0) {
+                // Check if field was cleared (no boxes with health > 0)
+                const remainingBoxes = boxes.filter(b => b.health > 0 && !b.isBallPickup).length;
+                fieldClearedLastShot = (remainingBoxes === 0);
+                
                 if (lastBallX !== null) {
                     LAUNCH_X = lastBallX;
                     LAUNCH_Y = CANVAS_HEIGHT - 30;
@@ -1348,10 +1365,9 @@
             }
             
             currentSpeed = calculateSpeed();
+            analyticalThreshold = calculateAnalyticalThreshold();
             
-            const ANALYTICAL_THRESHOLD = 10;
-            
-            if (currentSpeed < ANALYTICAL_THRESHOLD) {
+            if (currentSpeed < analyticalThreshold) {
                 const stepsThisFrame = Math.max(1, Math.ceil(currentSpeed));
                 collisionsThisFrame = 0;
                 
@@ -1379,7 +1395,7 @@
             
             // Render balls with different opacity based on mode
             for (let ball of balls) {
-                if (currentSpeed < ANALYTICAL_THRESHOLD) {
+                if (currentSpeed < analyticalThreshold) {
                     // Full opacity in iterative mode
                     ball.draw();
                 } else {
@@ -1492,11 +1508,13 @@
                 controlsDisabled = true;
                 hadActiveBalls = false;
                 timeInPlay = 0;
+                fieldClearedLastShot = false; // Reset field cleared flag
                 e.preventDefault();
             }
             
-            const minAngle = -Math.PI + 0.01;
-            const maxAngle = -0.01;
+            // Convert degree limits to radians
+            const minAngle = (MIN_ANGLE_DEGREES - 180) * Math.PI / 180;
+            const maxAngle = (MAX_ANGLE_DEGREES - 180) * Math.PI / 180;
             
             if (aimAngle > maxAngle) {
                 aimAngle = maxAngle;
