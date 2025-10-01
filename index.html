@@ -252,6 +252,7 @@
         <div class="audio-controls">
             <button id="audioToggle">🔊</button>
             <button id="musicToggle">🎵</button>
+            <button id="wallBounceToggle">🏓</button>
         </div>
     </div>
 
@@ -288,6 +289,7 @@
                 this.sfxVolume = 70;
                 this.musicVolume = 30;
                 this.musicEnabled = true;
+                this.wallBounceEnabled = true;
                 
                 // Music system
                 this.musicOscillators = [];
@@ -360,7 +362,7 @@
             }
             
             playWallHit() {
-                if (!this.enabled) return;
+                if (!this.enabled || !this.wallBounceEnabled) return;
                 this.wallHitCount++;
                 this.playSimpleCollisionSound('wall');
             }
@@ -582,6 +584,13 @@
                 } else {
                     this.stopMusic();
                 }
+            }
+            
+            toggleWallBounce() {
+                this.wallBounceEnabled = !this.wallBounceEnabled;
+                const button = document.getElementById('wallBounceToggle');
+                button.textContent = this.wallBounceEnabled ? '🏓' : '🔇';
+                button.classList.toggle('active', this.wallBounceEnabled);
             }
             
             generateMelody() {
@@ -1646,6 +1655,10 @@
         
         document.getElementById('musicToggle').addEventListener('click', () => {
             audioSystem.toggleMusic();
+        });
+        
+        document.getElementById('wallBounceToggle').addEventListener('click', () => {
+            audioSystem.toggleWallBounce();
         });
         
         // Mouse controls for temporary angle adjustment (available after level 60)
