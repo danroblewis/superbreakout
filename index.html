@@ -2,20 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Optimized Breakout</title>
     <style>
         body {
             margin: 0;
             padding: 20px;
-            display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            justify-content: center;
-            gap: 30px;
+            padding-bottom: 100px;
             background: #1a1a2e;
             color: #eee;
             font-family: 'Courier New', monospace;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
         }
         .game-container {
             display: flex;
@@ -62,10 +66,46 @@
         }
         .stat-row {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: nowrap;
+            margin-bottom: 15px;
         }
         .stat-row .stat {
+            min-width: 60px;
             flex: 1;
+            padding: 10px 8px;
+        }
+        .indicator-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .indicator-row .angle-indicator,
+        .indicator-row .speed-indicator {
+            flex: 1;
+            max-width: 200px;
+        }
+        .controls-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .audio-controls button {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
         }
         .stat-label {
             font-size: 12px;
@@ -191,15 +231,206 @@
         .autoshoot-button.active:hover {
             background: #c23b51;
         }
+        
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+                padding-bottom: 150px;
+                font-size: 12px;
+            }
+            
+            .main-container {
+                gap: 5px;
+                max-width: 100vw;
+            }
+            
+            .game-container {
+                order: 1;
+                position: relative;
+                width: 100%;
+                max-width: 100vw;
+            }
+            
+            .info {
+                order: 2;
+                width: 100%;
+                max-width: 100vw;
+                margin-top: 5px;
+                padding: 10px;
+                background: rgba(0, 0, 0, 0.1);
+                border-radius: 10px;
+            }
+            
+            #gameCanvas {
+                width: 100%;
+                max-width: 100vw;
+                height: auto;
+                aspect-ratio: 490/600;
+            }
+            
+            .autoshoot-button {
+                right: 10px;
+                top: 10px;
+                width: 50px;
+                height: 35px;
+                font-size: 14px;
+            }
+            
+            .audio-controls {
+                flex-direction: row;
+                gap: 8px;
+                justify-content: center;
+                margin-top: 5px;
+            }
+            
+            .audio-controls button {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+            
+            /* Compact stats layout for mobile */
+            .stat-row {
+                flex-direction: row;
+                justify-content: space-around;
+                margin-bottom: 5px;
+                gap: 4px;
+            }
+            
+            .stat {
+                min-width: 40px;
+                text-align: center;
+                flex: 1;
+                padding: 8px 4px;
+            }
+            
+            .indicator-row {
+                flex-direction: row;
+                gap: 10px;
+                margin-bottom: 10px;
+            }
+            
+            .indicator-row .angle-indicator,
+            .indicator-row .speed-indicator {
+                flex: 1;
+                max-width: none;
+            }
+            
+            .controls-row {
+                flex-direction: row;
+                gap: 15px;
+                margin-bottom: 10px;
+            }
+            
+            .audio-controls {
+                gap: 8px;
+            }
+            
+            .audio-controls button {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+            
+            .stat-label {
+                font-size: 10px;
+                margin-bottom: 2px;
+            }
+            
+            .stat-value {
+                font-size: 14px;
+            }
+            
+            .speed-indicator, .angle-indicator {
+                width: 120px;
+                height: 60px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .speed-indicator svg, .angle-indicator svg {
+                width: 100px;
+                height: 50px;
+            }
+            
+            .speed-gauge, .angle-gauge {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+            .speed-value, .angle-value {
+                font-size: 14px;
+                top: 70%;
+            }
+        }
+        
+        /* Touch Controls */
+        .touch-controls {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+        
+        .touch-controls.mobile {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .touch-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
+            transition: all 0.1s ease;
+        }
+        
+        .touch-button:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+        
+        .touch-button.shoot {
+            width: 100px;
+            height: 100px;
+            background: rgba(233, 69, 96, 0.3);
+            border-color: rgba(233, 69, 96, 0.5);
+        }
+        
+        .touch-button.shoot:active {
+            background: rgba(233, 69, 96, 0.5);
+        }
     </style>
 </head>
 <body>
-    <div class="info">
-        <div class="stat">
-            <div class="stat-label">LEVEL</div>
-            <div class="stat-value" id="levelCount">1</div>
+    <div class="main-container">
+        <div class="game-container">
+            <canvas id="gameCanvas" width="490" height="600"></canvas>
+            <button id="autoshootToggle" class="autoshoot-button">🤖</button>
         </div>
+        
+        <div class="info">
         <div class="stat-row">
+            <div class="stat">
+                <div class="stat-label">LEVEL</div>
+                <div class="stat-value" id="levelCount">1</div>
+            </div>
             <div class="stat">
                 <div class="stat-label">BALLS</div>
                 <div class="stat-value" id="ballCount">1</div>
@@ -208,57 +439,64 @@
                 <div class="stat-label">TO SHOOT</div>
                 <div class="stat-value" id="ballsToShoot">1</div>
             </div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">MAX SPEED</div>
-            <div class="stat-value" id="maxSpeed">20</div>
-        </div>
-        <div class="angle-indicator">
-            <div class="angle-label">ANGLE</div>
-            <div class="angle-gauge">
-                <svg width="150" height="85" viewBox="0 0 150 85">
-                    <!-- Background circle -->
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#0f3460" stroke-width="3" stroke-linecap="round"/>
-                    <!-- Angle indicator dot -->
-                    <circle id="angleDot" cx="75" cy="15" r="8" fill="#e8f4f8" stroke="#16213e" stroke-width="2"/>
-                </svg>
+            <div class="stat">
+                <div class="stat-label">MAX SPEED</div>
+                <div class="stat-value" id="maxSpeed">20</div>
             </div>
-            <div class="angle-value" id="angleValue">-90°</div>
         </div>
-        <div class="speed-indicator">
-            <div class="speed-label">SPEED</div>
-            <div class="speed-gauge">
-                <svg width="150" height="85" viewBox="0 0 150 85">
-                    <!-- Background arc (semicircle) -->
-                    <path d="M 15 75 A 60 60 0 0 1 135 75" fill="none" stroke="#0f3460" stroke-width="12" stroke-linecap="round"/>
-                    <!-- Speed arc with gradient -->
-                    <defs>
-                        <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" style="stop-color:#4ecca3;stop-opacity:1" />
-                            <stop offset="50%" style="stop-color:#e9a545;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    <path id="speedArc" d="M 15 75 A 60 60 0 0 1 135 75" fill="none" 
-                          stroke="url(#speedGradient)" stroke-width="12"
-                          stroke-dasharray="188.5" stroke-dashoffset="188.5"
-                          stroke-linecap="round"/>
-                </svg>
+        <div class="indicator-row">
+            <div class="angle-indicator">
+                <div class="angle-label">ANGLE</div>
+                <div class="angle-gauge">
+                    <svg width="150" height="85" viewBox="0 0 150 85">
+                        <!-- Background circle -->
+                        <circle cx="75" cy="75" r="60" fill="none" stroke="#0f3460" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Angle indicator dot -->
+                        <circle id="angleDot" cx="75" cy="15" r="8" fill="#e8f4f8" stroke="#16213e" stroke-width="2"/>
+                    </svg>
+                </div>
+                <div class="angle-value" id="angleValue">-90°</div>
             </div>
-            <div class="speed-value" id="speedValue">1.0x</div>
+            <div class="speed-indicator">
+                <div class="speed-label">SPEED</div>
+                <div class="speed-gauge">
+                    <svg width="150" height="85" viewBox="0 0 150 85">
+                        <!-- Background arc (semicircle) -->
+                        <path d="M 15 75 A 60 60 0 0 1 135 75" fill="none" stroke="#0f3460" stroke-width="12" stroke-linecap="round"/>
+                        <!-- Speed arc with gradient -->
+                        <defs>
+                            <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#4ecca3;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#e9a545;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        <path id="speedArc" d="M 15 75 A 60 60 0 0 1 135 75" fill="none" 
+                              stroke="url(#speedGradient)" stroke-width="12"
+                              stroke-dasharray="188.5" stroke-dashoffset="188.5"
+                              stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="speed-value" id="speedValue">1.0x</div>
+            </div>
         </div>
         
-        <button id="resetBtn">Reset Game</button>
-        <div class="audio-controls">
-            <button id="audioToggle">🔊</button>
-            <button id="musicToggle">🎵</button>
-            <button id="wallBounceToggle">🏓</button>
+        <div class="controls-row">
+            <button id="resetBtn">Reset</button>
+            <div class="audio-controls">
+                <button id="audioToggle">🔊</button>
+                <button id="musicToggle">🎵</button>
+                <button id="wallBounceToggle">🏓</button>
+            </div>
         </div>
     </div>
-
-    <div class="game-container">
-        <canvas id="gameCanvas" width="490" height="600"></canvas>
-        <button id="autoshootToggle" class="autoshoot-button">🤖</button>
+    </div>
+    
+    <!-- Touch Controls for Mobile -->
+    <div class="touch-controls" id="touchControls">
+        <button class="touch-button" id="touchLeft">←</button>
+        <button class="touch-button shoot" id="touchShoot">SHOOT</button>
+        <button class="touch-button" id="touchRight">→</button>
     </div>
 
     <script>
@@ -814,6 +1052,12 @@
         let punishmentRowCount = 1;
         let consecutiveClears = 0;
         
+        // Mobile detection and touch controls
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                        (window.innerWidth <= 768);
+        let touchLeftActive = false;
+        let touchRightActive = false;
+        
         function initGame() {
             boxes = [];
             balls = [];
@@ -854,6 +1098,59 @@
             // Start music if enabled
             if (audioSystem.musicEnabled) {
                 audioSystem.startMusic();
+            }
+        }
+        
+        // Mobile initialization
+        function initMobile() {
+            if (isMobile) {
+                document.getElementById('touchControls').classList.add('mobile');
+                
+                // Touch control event listeners
+                document.getElementById('touchLeft').addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    touchLeftActive = true;
+                });
+                
+                document.getElementById('touchLeft').addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    touchLeftActive = false;
+                });
+                
+                document.getElementById('touchRight').addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    touchRightActive = true;
+                });
+                
+                document.getElementById('touchRight').addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    touchRightActive = false;
+                });
+                
+                document.getElementById('touchShoot').addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (!controlsDisabled && ballsToLaunch === 0) {
+                        ballsToLaunch = ballCount;
+                        launchTimer = 0;
+                        controlsDisabled = true;
+                        hadActiveBalls = false;
+                        timeInPlay = 0;
+                        fieldClearedLastShot = false;
+                    }
+                });
+                
+                // Prevent default touch behaviors
+                document.addEventListener('touchstart', (e) => {
+                    if (e.target.closest('.touch-controls')) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                
+                document.addEventListener('touchend', (e) => {
+                    if (e.target.closest('.touch-controls')) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
             }
         }
         
@@ -1398,6 +1695,22 @@
             ctx.fillStyle = '#0f3460';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             
+            // Handle touch controls
+            if (isMobile && !controlsDisabled) {
+                if (touchLeftActive) {
+                    const minAngle = (MIN_ANGLE_DEGREES - 180) * Math.PI / 180;
+                    const maxAngle = (MAX_ANGLE_DEGREES - 180) * Math.PI / 180;
+                    const angleStep = 0.02; // Much slower for touch controls
+                    aimAngle = Math.max(minAngle, aimAngle - angleStep);
+                }
+                if (touchRightActive) {
+                    const minAngle = (MIN_ANGLE_DEGREES - 180) * Math.PI / 180;
+                    const maxAngle = (MAX_ANGLE_DEGREES - 180) * Math.PI / 180;
+                    const angleStep = 0.02; // Much slower for touch controls
+                    aimAngle = Math.min(maxAngle, aimAngle + angleStep);
+                }
+            }
+            
             // Handle sequential ball launching
             if (ballsToLaunch > 0) {
                 launchTimer++;
@@ -1735,6 +2048,7 @@
         }, { once: true });
         
         initGame();
+        initMobile();
         gameLoop();
     </script>
 </body>
